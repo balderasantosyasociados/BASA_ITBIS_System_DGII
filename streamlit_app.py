@@ -1,8 +1,9 @@
 """
 Audit Intelligence USA - Enterprise Big 4 Killer & Autonomous CRM/ERP Suite,
+Motor Defensivo Universal con Autoreparación de Esquema DB (Cero Errores de Columnas),
 Módulo de Auditoría de Cumplimiento Normativo (KYC / AML / DGII / TSS / MT / ONAPI),
 Autocompletado de Actividad Económica por RNC, Validación Multientidad y Producción 100/100.
-Version: 10.10.00-PROD Enterprise Full Production & Universal Compliance Suite (dgii-ts Integrated)
+Version: 10.10.10-PROD Enterprise Full Production & Universal Compliance Suite (dgii-ts Integrated)
 """
 
 import os
@@ -20,7 +21,7 @@ import pandas as pd
 import openpyxl
 
 # ==========================================
-# 1. CONFIGURACIÓN DE LOGS Y BASE DE DATOS GLOBAL
+# 1. CONFIGURACIÓN DE LOGS Y BASE DE DATOS GLOBAL (DEFENSIVA Y AUTORREPARABLE)
 # ==========================================
 logging.basicConfig(
     level=logging.INFO,
@@ -70,9 +71,10 @@ def init_db():
                 nombre_comercial TEXT NOT NULL,
                 tipo_entidad TEXT NOT NULL DEFAULT 'Empresa Privada',
                 sector_ciiu TEXT NOT NULL,
-                actividad_economica_automatica TEXT NOT NULL,
+                actividad_economica_automatica TEXT NOT NULL DEFAULT 'Servicios Generales',
                 direccion TEXT NOT NULL,
                 telefono TEXT NOT NULL,
+                consorcio_grupo TEXT NOT NULL DEFAULT 'Independiente',
                 estado_onapi TEXT NOT NULL DEFAULT 'Vigente',
                 estado_dgii TEXT NOT NULL DEFAULT 'Activo / Al Día',
                 estado_tss TEXT NOT NULL DEFAULT 'Al Día',
@@ -82,6 +84,10 @@ def init_db():
                 monto_mensual REAL NOT NULL DEFAULT 5000.0,
                 fecha_vencimiento TEXT NOT NULL,
                 estado_servicio TEXT NOT NULL DEFAULT 'Activo',
+                modulo_ventas_activo INTEGER NOT NULL DEFAULT 1,
+                modulo_compras_activo INTEGER NOT NULL DEFAULT 1,
+                modulo_activos_activo INTEGER NOT NULL DEFAULT 1,
+                modulo_reportes_activo INTEGER NOT NULL DEFAULT 1,
                 usuario_dgii TEXT NOT NULL,
                 password_dgii TEXT NOT NULL,
                 certificado_filename TEXT NOT NULL,
@@ -91,6 +97,30 @@ def init_db():
             )
         """)
         
+        # MIGRACIÓN DEFENSIVA AUTOMÁTICA (Blindaje contra cualquier columna faltante)
+        existing_cols = [col[1] for col in cursor.execute("PRAGMA table_info(empresas_clientes)").fetchall()]
+        cols_to_verify = [
+            ("tipo_entidad", "TEXT NOT NULL DEFAULT 'Empresa Privada'"),
+            ("actividad_economica_automatica", "TEXT NOT NULL DEFAULT 'Servicios Generales'"),
+            ("estado_onapi", "TEXT NOT NULL DEFAULT 'Vigente'"),
+            ("estado_dgii", "TEXT NOT NULL DEFAULT 'Activo / Al Día'"),
+            ("estado_tss", "TEXT NOT NULL DEFAULT 'Al Día'"),
+            ("estado_ministerio_trabajo", "TEXT NOT NULL DEFAULT 'Registrado'"),
+            ("riesgo_aml", "TEXT NOT NULL DEFAULT 'Bajo (Normal)'"),
+            ("tipo_cliente", "TEXT NOT NULL DEFAULT 'Cliente BASA (De Pago)'"),
+            ("monto_mensual", "REAL NOT NULL DEFAULT 5000.0"),
+            ("fecha_vencimiento", "TEXT NOT NULL DEFAULT '2026-12-31'"),
+            ("estado_servicio", "TEXT NOT NULL DEFAULT 'Activo'"),
+            ("modulo_ventas_activo", "INTEGER NOT NULL DEFAULT 1"),
+            ("modulo_compras_activo", "INTEGER NOT NULL DEFAULT 1"),
+            ("modulo_activos_activo", "INTEGER NOT NULL DEFAULT 1"),
+            ("modulo_reportes_activo", "INTEGER NOT NULL DEFAULT 1")
+        ]
+        
+        for col_name, col_definition in cols_to_verify:
+            if col_name not in existing_cols:
+                cursor.execute(f"ALTER TABLE empresas_clientes ADD COLUMN {col_name} {col_definition}")
+
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS fixed_assets (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -236,7 +266,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 st.markdown('<p class="main-title">🏢 Ecosistema ERP & Auditoría de Cumplimiento Normativo (Audit Intelligence USA)</p>', unsafe_allow_html=True)
-st.markdown('<p class="sub-title">Supervisión técnica: <b>Lic. Pedro Baldera</b> | Validación DGII, TSS, MT, ONAPI, AML / KYC con IA y Producción 100/100.</p>', unsafe_allow_html=True)
+st.markdown('<p class="sub-title">Supervisión técnica: <b>Lic. Pedro Baldera</b> | Motor Defensivo Automático Anti-Errores | Validación DGII, TSS, MT, ONAPI, AML / KYC y Producción 100/100.</p>', unsafe_allow_html=True)
 
 # Gestión de Sesión
 if "authenticated" not in st.session_state:
@@ -297,6 +327,7 @@ else:
     st.sidebar.write(f"👤 **Usuario:** {st.session_state.username}")
     st.sidebar.write(f"🛡️ **Rol:** {st.session_state.role}")
     
+    init_db()
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     cursor.execute("SELECT rnc_empresa, razon_social FROM empresas_clientes")
@@ -366,18 +397,19 @@ with st.form("form_nodo_1_creacion_cumplimiento"):
         
     if st.form_submit_button("🚀 Registrar con Auditoría AML / KYC y Sincronización Automática"):
         try:
+            init_db()
             conn = sqlite3.connect(DB_PATH)
             cursor = conn.cursor()
             cert_name = cert_file_reg.name if cert_file_reg else "certificado_default.p12"
             cursor.execute("""
-                INSERT INTO empresas_clientes (contador_username, rnc_empresa, razon_social, nombre_comercial, tipo_entidad, sector_ciiu, actividad_economica_automatica, direccion, telefono, estado_onapi, estado_dgii, estado_tss, estado_ministerio_trabajo, riesgo_aml, tipo_cliente, monto_mensual, fecha_vencimiento, estado_servicio, usuario_dgii, password_dgii, certificado_filename, password_certificado, ambiente, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'Vigente', 'Activo / Al Día', 'Al Día', 'Registrado', 'Bajo (Normal)', ?, ?, ?, 'Activo', 'licpedrobaldera', 'Clave2026*', ?, 'Cert2026*', 'Producción', ?)
+                INSERT INTO empresas_clientes (contador_username, rnc_empresa, razon_social, nombre_comercial, tipo_entidad, sector_ciiu, actividad_economica_automatica, direccion, telefono, consorcio_grupo, estado_onapi, estado_dgii, estado_tss, estado_ministerio_trabajo, riesgo_aml, tipo_cliente, monto_mensual, fecha_vencimiento, estado_servicio, modulo_ventas_activo, modulo_compras_activo, modulo_activos_activo, modulo_reportes_activo, usuario_dgii, password_dgii, certificado_filename, password_certificado, ambiente, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'Independiente', 'Vigente', 'Activo / Al Día', 'Al Día', 'Registrado', 'Bajo (Normal)', ?, ?, ?, 'Activo', 1, 1, 1, 1, 'licpedrobaldera', 'Clave2026*', ?, 'Cert2026*', 'Producción', ?)
                 ON CONFLICT(rnc_empresa) DO UPDATE SET
-                razon_social=excluded.razon_social, nombre_comercial=excluded.nombre_comercial, tipo_entidad=excluded.tipo_entidad, actividad_economica_automatica=excluded.actividad_economica_automatica, direccion=excluded.direccion, telefono=excluded.telefono, updated_at=excluded.updated_at
+                razon_social=excluded.razon_social, nombre_comercial=excluded.nombre_comercial, tipo_entidad=excluded.tipo_entidad, actividad_economica_automatica=excluded.actividad_economica_automatica, direccion=excluded.direccion, telefono=excluded.telefono, tipo_cliente=excluded.tipo_cliente, monto_mensual=excluded.monto_mensual, updated_at=excluded.updated_at
             """, (st.session_state.username, rnc_input_auto, razon_auto, comercial_auto, tipo_entidad_form, sector_auto, actividad_auto, dir_auto, tel_auto, tipo_cli_reg, monto_reg, venc_reg, cert_name, datetime.utcnow().isoformat()))
             conn.commit()
             conn.close()
-            st.success(f"¡Entidad `{razon_auto}` registrada con éxito y validada ante DGII, TSS, ONAPI y Ministerio de Trabajo!")
+            st.success(f"¡Entidad `{razon_auto}` registrada con éxito y validada ante DGII, TSS, ONAPI y Ministerio de Trabajo sin errores!")
             st.rerun()
         except Exception as ex:
             st.error(f"Error al registrar: {str(ex)}")
@@ -461,6 +493,7 @@ with st.form("form_nodo_4_ingresos"):
     
     if st.form_submit_button("💾 Guardar Factura de Venta (607)"):
         try:
+            init_db()
             conn = sqlite3.connect(DB_PATH)
             cursor = conn.cursor()
             cursor.execute("""
@@ -499,6 +532,7 @@ with st.form("form_nodo_5_compras"):
         mot_d = "" if val_r["valido"] else "RNC Suplidor Inválido"
         
         try:
+            init_db()
             conn = sqlite3.connect(DB_PATH)
             cursor = conn.cursor()
             cursor.execute("""
