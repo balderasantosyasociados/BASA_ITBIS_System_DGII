@@ -479,7 +479,7 @@ elif menu_modulo == "🔄 Módulo de Recuperación de Datos (IR-1 / IR-2)":
     st.markdown("Suba el documento oficial de la Declaración Jurada **IR-1** (Personas Físicas) o **IR-2** (Personas Jurídicas) presentada ante la DGII para extraer automáticamente los balances iniciales, activos, pasivos, capital e historial tributario.")
     
     tipo_declaracion = st.selectbox("Tipo de Declaración Jurada:", ["IR-2 (Sociedades / Personas Jurídicas)", "IR-1 (Personas Físicas / Negocios de Único Dueño)"])
--    ano_fiscal_recup = st.selectbox("Año Fiscal de la Declaración:", [2025, 2024, 2023, 2022, 2021])
+    ano_fiscal_recup = st.selectbox("Año Fiscal de la Declaración:", [2025, 2024, 2023, 2022, 2021])
     archivo_ir_subido = st.file_uploader("Subir Declaración Jurada (PDF Oficial DGII):", type=["pdf"])
 
     if archivo_ir_subido and st.button("🚀 Extraer Balances Iniciales y Actualizar Historial", type="primary"):
