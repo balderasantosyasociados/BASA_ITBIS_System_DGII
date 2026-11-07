@@ -3,7 +3,7 @@ Audit Intelligence USA - Enterprise Multi-Tenant SaaS, Contabilidad Global Multi
 Facturación e-CF, Catálogo de Cuentas Dinámico con Afectación Automática, Sincronización 606/607,
 Autogestión Autónoma con Inteligencia Artificial, Mejora Continua, Integración GitHub / APIs Externas,
 Historial de Scripts, Control de Activación/Desactivación y Seguridad Antihacker Avanzada (10/10).
-Version: 10.9.24-PROD Enterprise Full Production & Autonomous Intelligence Suite
+Version: 10.9.25-PROD Enterprise Full Production & Autonomous Intelligence Suite (Robust DB Fallback)
 """
 
 import os
@@ -13,7 +13,6 @@ import sqlite3
 import hashlib
 import secrets
 import logging
-import urllib.request
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Any
 import streamlit as st
@@ -96,9 +95,9 @@ def init_db():
             CREATE TABLE IF NOT EXISTS autonomous_script_registry (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 titulo_mejora TEXT NOT NULL,
-                fuente_origen TEXT NOT NULL, -- GitHub, IA Externa, API, Autogestión
+                fuente_origen TEXT NOT NULL,
                 codigo_script_origen TEXT NOT NULL,
-                estado_activo INTEGER NOT NULL DEFAULT 1, -- 1: Activado, 0: Desactivado por Admin
+                estado_activo INTEGER NOT NULL DEFAULT 1,
                 hash_seguridad TEXT NOT NULL,
                 created_at TEXT NOT NULL
             )
@@ -212,7 +211,7 @@ def init_db():
             )
         """)
 
-        # Auto-migración segura
+        # Auto-migración robusta y completa para evitar cualquier OperationalError / DatabaseError
         migrations = [
             ("users", "logo_path", "TEXT DEFAULT ''"),
             ("users", "ciiu_sector", "TEXT DEFAULT 'General'"),
@@ -220,7 +219,12 @@ def init_db():
             ("purchases_606", "empresa_asociada", "TEXT DEFAULT 'Principal'"),
             ("user_companies", "sector_ciiu", "TEXT DEFAULT 'Comercio General'"),
             ("tax_declarations_records", "autorizacion_soporte_path", "TEXT DEFAULT ''"),
-            ("journal_entries", "username", "TEXT DEFAULT 'admin'")
+            ("journal_entries", "username", "TEXT DEFAULT 'admin'"),
+            ("journal_entries", "codigo_cuenta_debito", "TEXT DEFAULT '11101'"),
+            ("journal_entries", "codigo_cuenta_credito", "TEXT DEFAULT '41101'"),
+            ("journal_entries", "monto", "REAL DEFAULT 0.0"),
+            ("journal_entries", "concepto", "TEXT DEFAULT ''"),
+            ("journal_entries", "fecha", "TEXT DEFAULT ''")
         ]
         for table, col, col_def in migrations:
             try:
@@ -758,7 +762,10 @@ with tabs[8]:
 
     st.markdown("#### 📋 Historial de Asientos Diarios Registrados")
     conn = sqlite3.connect(DB_PATH)
-    df_asientos = pd.read_sql_query("SELECT id, codigo_cuenta_debito, codigo_cuenta_credito, monto, concepto, fecha FROM journal_entries WHERE username = ?", conn, params=(st.session_state.username,))
+    try:
+        df_asientos = pd.read_sql_query("SELECT id, codigo_cuenta_debito, codigo_cuenta_credito, monto, concepto, fecha FROM journal_entries WHERE username = ?", conn, params=(st.session_state.username,))
+    except Exception:
+        df_asientos = pd.DataFrame(columns=["id", "codigo_cuenta_debito", "codigo_cuenta_credito", "monto", "concepto", "fecha"])
     conn.close()
     st.dataframe(df_asientos, use_container_width=True)
 
@@ -847,7 +854,10 @@ with tabs[13]:
     st.markdown("---")
     st.subheader("📜 Historial de Scripts y Control de Activación / Desactivación")
     conn = sqlite3.connect(DB_PATH)
-    df_scripts = pd.read_sql_query("SELECT id, titulo_mejora, fuente_origen, estado_activo, hash_seguridad, created_at FROM autonomous_script_registry", conn)
+    try:
+        df_scripts = pd.read_sql_query("SELECT id, titulo_mejora, fuente_origen, estado_activo, hash_seguridad, created_at FROM autonomous_script_registry", conn)
+    except Exception:
+        df_scripts = pd.DataFrame(columns=["id", "titulo_mejora", "fuente_origen", "estado_activo", "hash_seguridad", "created_at"])
     conn.close()
 
     if not df_scripts.empty:
@@ -867,7 +877,7 @@ with tabs[13]:
             st.success("¡Script activado correctamente!")
             st.rerun()
             
-        if col_st2.button("🔴 Desuactivar / Pausar Script"):
+        if col_st2.button("🔴 Desactivar / Pausar Script"):
             conn = sqlite3.connect(DB_PATH)
             cursor = conn.cursor()
             cursor.execute("UPDATE autonomous_script_registry SET estado_activo = 0 WHERE id = ?", (script_sel_id,))
@@ -890,6 +900,9 @@ if st.session_state.role == "AdministradorMaster" and len(tabs) > 15:
     with tabs[15]:
         st.markdown("### ⚙️ Panel Admin Master Global")
         conn = sqlite3.connect(DB_PATH)
-        df_u = pd.read_sql_query("SELECT username, full_name, role, pais, ciiu_sector FROM users WHERE username = ?", conn, params=(st.session_state.username,))
+        try:
+            df_u = pd.read_sql_query("SELECT username, full_name, role, pais, ciiu_sector FROM users WHERE username = ?", conn, params=(st.session_state.username,))
+        except Exception:
+            df_u = pd.DataFrame(columns=["username", "full_name", "role", "pais", "ciiu_sector"])
         conn.close()
         st.dataframe(df_u, use_container_width=True)
