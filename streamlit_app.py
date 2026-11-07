@@ -1,6 +1,6 @@
 """
 ITBIS_SISTEM_DGII_FULL - Enterprise Multi-Tenant SaaS, Contabilidad Completa, Facturador DGII, Cartera de Clientes & Activos Fijos
-Version: 10.9.3-PROD Enterprise Full Production & Accounting Suite
+Version: 10.9.4-PROD Enterprise Full Production, Self-Healing & Migration Safe
 Configured for Streamlit Cloud, Autonomous Self-Healing, Double-Entry & Depreciation Engines
 """
 
@@ -18,14 +18,14 @@ import pandas as pd
 import openpyxl
 
 # ==========================================
-# 1. CONFIGURACIÓN DE LOGS Y BASE DE DATOS
+# 1. CONFIGURACIÓN DE LOGS Y BASE DE DATOS (MIGRATION SAFE)
 # ==========================================
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] ITBIS_DGII_ACCOUNTING_CORE: %(message)s",
     handlers=[logging.StreamHandler(sys.stdout)]
 )
-logger = logging.getLogger("ITBIS_SISTEM_DGII_FULL")
+logger = logging.getLogger("BASA_10_ITBIS_System_DGII")
 
 DB_PATH = "itbis_sistem_dgii_full.db"
 
@@ -55,7 +55,7 @@ def init_db():
             )
         """)
         
-        # Cartera de Clientes (Histórico y Credenciales)
+        # Cartera de Clientes
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS clients_directory (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -68,7 +68,7 @@ def init_db():
             )
         """)
         
-        # Transacciones Fiscales / Ventas e-NCF y CxC
+        # Ventas e-NCF y CxC
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS sales_invoices (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -85,7 +85,7 @@ def init_db():
             )
         """)
         
-        # Compras / Formato 606 y CxP
+        # Compras 606 y CxP
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS purchases_606 (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -101,7 +101,7 @@ def init_db():
             )
         """)
         
-        # Flujo de Efectivo (Ingresos y Egresos)
+        # Flujo de Caja
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS cash_flow (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -114,7 +114,7 @@ def init_db():
             )
         """)
         
-        # Asientos de Diario (Partida Doble)
+        # Asientos de Diario
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS journal_entries (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -127,7 +127,7 @@ def init_db():
             )
         """)
         
-        # Control de Activos Fijos y Depreciación
+        # Activos Fijos
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS fixed_assets (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -139,6 +139,17 @@ def init_db():
                 fecha_adquisicion TEXT NOT NULL
             )
         """)
+
+        # Auto-migración segura: Asegurar columnas faltantes en bases de datos existentes
+        try:
+            cursor.execute("ALTER TABLE sales_invoices ADD COLUMN nombre_cliente TEXT DEFAULT ''")
+        except sqlite3.OperationalError:
+            pass # La columna ya existe
+
+        try:
+            cursor.execute("ALTER TABLE purchases_606 ADD COLUMN nombre_suplidor TEXT DEFAULT ''")
+        except sqlite3.OperationalError:
+            pass
 
         # Admin por defecto
         cursor.execute("SELECT COUNT(*) FROM users WHERE role = 'Administrador'")
@@ -152,7 +163,7 @@ def init_db():
         conn.commit()
         conn.close()
     except Exception as e:
-        logger.error(f"Error DB: {str(e)}")
+        logger.error(f"Error DB Migration: {str(e)}")
 
 init_db()
 
@@ -287,8 +298,6 @@ tabs = st.tabs([
 # --- PESTAÑA 0: PANEL ---
 with tabs[0]:
     st.markdown("### 📊 Panel Ejecutivo General")
-    
-    # Widget de Acceso Directo al Facturador Gratuito DGII
     st.markdown("""
         <div class="dgii-card">
             <h4>🔗 Acceso Directo Oficial DGII</h4>
@@ -313,7 +322,6 @@ with tabs[0]:
 with tabs[1]:
     st.markdown("### ⚡ Módulo de Ventas e-NCF y Cuentas por Cobrar")
     
-    # Cargar clientes registrados para autocompletar
     conn = sqlite3.connect(DB_PATH)
     lista_clientes = pd.read_sql_query("SELECT nombre_cliente, rnc_cedula FROM clients_directory WHERE username = ?", conn, params=(st.session_state.username,))
     conn.close()
