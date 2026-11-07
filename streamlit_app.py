@@ -1,6 +1,6 @@
 """
-ITBIS_SISTEM_DGII_FULL - Enterprise Multi-Tenant SaaS, Contabilidad Completa, Activos Fijos, Flujo de Caja y Estados Financieros
-Version: 10.9.2-PROD Enterprise Full Production & Accounting Suite
+ITBIS_SISTEM_DGII_FULL - Enterprise Multi-Tenant SaaS, Contabilidad Completa, Facturador DGII, Cartera de Clientes & Activos Fijos
+Version: 10.9.3-PROD Enterprise Full Production & Accounting Suite
 Configured for Streamlit Cloud, Autonomous Self-Healing, Double-Entry & Depreciation Engines
 """
 
@@ -55,12 +55,26 @@ def init_db():
             )
         """)
         
-        # Transacciones Fiscales / Ventas e-NCF
+        # Cartera de Clientes (Histórico y Credenciales)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS clients_directory (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                username TEXT NOT NULL,
+                nombre_cliente TEXT NOT NULL,
+                rnc_cedula TEXT NOT NULL,
+                correo TEXT NOT NULL,
+                telefono TEXT NOT NULL,
+                direccion TEXT NOT NULL
+            )
+        """)
+        
+        # Transacciones Fiscales / Ventas e-NCF y CxC
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS sales_invoices (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 username TEXT NOT NULL,
                 rnc_cliente TEXT NOT NULL,
+                nombre_cliente TEXT NOT NULL,
                 tipo_ncf TEXT NOT NULL,
                 monto_neto REAL NOT NULL,
                 itbis REAL NOT NULL,
@@ -71,12 +85,13 @@ def init_db():
             )
         """)
         
-        # Compras / Formato 606 y Cuentas por Pagar
+        # Compras / Formato 606 y CxP
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS purchases_606 (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 username TEXT NOT NULL,
                 rnc_suplidor TEXT NOT NULL,
+                nombre_suplidor TEXT NOT NULL,
                 ncf_comprobante TEXT NOT NULL,
                 monto_facturado REAL NOT NULL,
                 itbis_facturado REAL NOT NULL,
@@ -91,7 +106,7 @@ def init_db():
             CREATE TABLE IF NOT EXISTS cash_flow (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 username TEXT NOT NULL,
-                tipo_movimiento TEXT NOT NULL, -- Ingreso o Egreso
+                tipo_movimiento TEXT NOT NULL,
                 categoria TEXT NOT NULL,
                 monto REAL NOT NULL,
                 descripcion TEXT NOT NULL,
@@ -118,7 +133,7 @@ def init_db():
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 username TEXT NOT NULL,
                 descripcion TEXT NOT NULL,
-                categoria_dgii TEXT NOT NULL, -- Cat 1 (5%), Cat 2 (25%), Cat 3 (15%)
+                categoria_dgii TEXT NOT NULL,
                 costo_adquisicion REAL NOT NULL,
                 depreciacion_acumulada REAL NOT NULL,
                 fecha_adquisicion TEXT NOT NULL
@@ -133,12 +148,6 @@ def init_db():
                 INSERT INTO users (username, password_hash, full_name, role, rnc_cedula, email, phone, pais, subscription_status, subscription_expiry, created_at)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, ("admin", admin_pass_hash, "Administrador Master ITBIS", "Administrador", "131-0000000-1", "admin@itbissystem.com", "+18095550000", "República Dominicana", "ActivoPagado69", "2099-12-31", datetime.utcnow().isoformat()))
-
-        cursor.execute("SELECT value FROM system_config WHERE key = 'admin_token_hash'")
-        if not cursor.fetchone():
-            master_token = secrets.token_hex(32)
-            master_hash = hashlib.sha256(master_token.encode()).hexdigest()
-            cursor.execute("INSERT OR REPLACE INTO system_config (key, value) VALUES (?, ?)", ("admin_token_hash", master_hash))
 
         conn.commit()
         conn.close()
@@ -162,6 +171,7 @@ st.markdown("""
     <style>
     .main-title { font-size: 26px; font-weight: bold; color: #1F4E78; margin-bottom: 0px; }
     .sub-title { font-size: 15px; color: #595959; margin-bottom: 20px; }
+    .dgii-card { background-color: #f1f8ff; padding: 15px; border-radius: 8px; border: 1px solid #c8e1ff; margin-bottom: 15px; }
     </style>
 """, unsafe_allow_html=True)
 
@@ -265,6 +275,7 @@ else:
 tabs = st.tabs([
     "📊 Panel", 
     "⚡ Ventas e-NCF & CxC", 
+    "👥 Cartera Clientes",
     "📥 Compras 606 & CxP", 
     "💵 Flujo de Caja", 
     "📒 Asientos Diario", 
@@ -276,6 +287,15 @@ tabs = st.tabs([
 # --- PESTAÑA 0: PANEL ---
 with tabs[0]:
     st.markdown("### 📊 Panel Ejecutivo General")
+    
+    # Widget de Acceso Directo al Facturador Gratuito DGII
+    st.markdown("""
+        <div class="dgii-card">
+            <h4>🔗 Acceso Directo Oficial DGII</h4>
+            <p>Acceda directamente a la plataforma externa oficial del <a href="https://fg.dgii.gov.do/ecf/PortalFG/login?redirectUrl=%2Fecf%2Fportalfg" target="_blank">Facturador Gratuito DGII</a> para operaciones adicionales en línea.</p>
+        </div>
+    """, unsafe_allow_html=True)
+
     conn = sqlite3.connect(DB_PATH)
     df_ventas = pd.read_sql_query("SELECT SUM(monto_total) AS total FROM sales_invoices WHERE username = ?", conn, params=(st.session_state.username,))
     df_compras = pd.read_sql_query("SELECT SUM(monto_facturado) AS total FROM purchases_606 WHERE username = ?", conn, params=(st.session_state.username,))
@@ -292,13 +312,29 @@ with tabs[0]:
 # --- PESTAÑA 1: VENTAS Y CXC ---
 with tabs[1]:
     st.markdown("### ⚡ Módulo de Ventas e-NCF y Cuentas por Cobrar")
+    
+    # Cargar clientes registrados para autocompletar
+    conn = sqlite3.connect(DB_PATH)
+    lista_clientes = pd.read_sql_query("SELECT nombre_cliente, rnc_cedula FROM clients_directory WHERE username = ?", conn, params=(st.session_state.username,))
+    conn.close()
+    
+    cliente_seleccionado = None
+    rnc_autocompletado = ""
+    if not lista_clientes.empty:
+        nombres_cli = ["-- Seleccionar de Cartera --"] + list(lista_clientes['nombre_cliente'])
+        sel_cli = st.selectbox("Seleccionar Cliente Frecuente de Cartera", nombres_cli)
+        if sel_cli != "-- Seleccionar de Cartera --":
+            cliente_seleccionado = sel_cli
+            rnc_autocompletado = lista_clientes[lista_clientes['nombre_cliente'] == sel_cli]['rnc_cedula'].values[0]
+
     with st.form("form_venta"):
         col1, col2 = st.columns(2)
         with col1:
-            rnc_cli = st.text_input("RNC o Cédula del Cliente")
+            nom_cli_input = st.text_input("Nombre del Cliente", value=cliente_seleccionado or "")
+            rnc_cli = st.text_input("RNC o Cédula del Cliente", value=rnc_autocompletado or "")
             tipo_ncf = st.selectbox("Tipo e-NCF", ["E31 - Crédito Fiscal", "E32 - Consumo"])
-            monto_neto = st.number_input("Monto Neto", min_value=0.0, value=10000.0)
         with col2:
+            monto_neto = st.number_input("Monto Neto", min_value=0.0, value=10000.0)
             dias_venc = st.number_input("Plazo Crédito (Días)", value=30)
             emitir = st.form_submit_button("🚀 Emitir Factura y Registrar CxC")
             
@@ -309,29 +345,61 @@ with tabs[1]:
             conn = sqlite3.connect(DB_PATH)
             cursor = conn.cursor()
             cursor.execute("""
-                INSERT INTO sales_invoices (username, rnc_cliente, tipo_ncf, monto_neto, itbis, monto_total, vencimiento, estado, created_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, 'PendienteCobro', ?)
-            """, (st.session_state.username, rnc_cli, tipo_ncf, monto_neto, itbis, total, venc, datetime.utcnow().isoformat()))
+                INSERT INTO sales_invoices (username, rnc_cliente, nombre_cliente, tipo_ncf, monto_neto, itbis, monto_total, vencimiento, estado, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'PendienteCobro', ?)
+            """, (st.session_state.username, rnc_cli, nom_cli_input, tipo_ncf, monto_neto, itbis, total, venc, datetime.utcnow().isoformat()))
             conn.commit()
             conn.close()
-            st.success("¡Factura emitida y registrada en Cuentas por Cobrar!")
+            st.success("¡Factura emitida, guardada en histórico y registrada en Cuentas por Cobrar!")
 
-    st.markdown("#### 📋 Listado de Cuentas por Cobrar (CxC)")
+    st.markdown("#### 📋 Listado de Cuentas por Cobrar (CxC) y Vencimientos")
     conn = sqlite3.connect(DB_PATH)
-    df_cxc = pd.read_sql_query("SELECT id, rnc_cliente, tipo_ncf, monto_total, vencimiento, estado FROM sales_invoices WHERE username = ?", conn, params=(st.session_state.username,))
+    df_cxc = pd.read_sql_query("SELECT id, nombre_cliente, rnc_cliente, tipo_ncf, monto_total, vencimiento, estado FROM sales_invoices WHERE username = ?", conn, params=(st.session_state.username,))
     conn.close()
     st.dataframe(df_cxc, use_container_width=True)
 
-# --- PESTAÑA 2: COMPRAS 606 Y CXP ---
+# --- PESTAÑA 2: CARTERA DE CLIENTES ---
 with tabs[2]:
+    st.markdown("### 👥 Cartera de Clientes y Histórico de Credenciales")
+    with st.form("form_cliente_cartera"):
+        col1, col2 = st.columns(2)
+        with col1:
+            nombre_c = st.text_input("Nombre o Razón Social del Cliente")
+            rnc_c = st.text_input("RNC o Cédula")
+            correo_c = st.text_input("Correo Electrónico")
+        with col2:
+            tel_c = st.text_input("Teléfono / Celular")
+            dir_c = st.text_input("Dirección Comercial")
+            guardar_cli = st.form_submit_button("💾 Guardar en Cartera de Clientes")
+            
+        if guardar_cli:
+            conn = sqlite3.connect(DB_PATH)
+            cursor = conn.cursor()
+            cursor.execute("""
+                INSERT INTO clients_directory (username, nombre_cliente, rnc_cedula, correo, telefono, direccion)
+                VALUES (?, ?, ?, ?, ?, ?)
+            """, (st.session_state.username, nombre_c, rnc_c, correo_c, tel_c, dir_c))
+            conn.commit()
+            conn.close()
+            st.success("¡Cliente guardado en cartera con éxito para futuras facturaciones!")
+
+    st.markdown("#### 📋 Directorio de Clientes Registrados")
+    conn = sqlite3.connect(DB_PATH)
+    df_dir = pd.read_sql_query("SELECT nombre_cliente, rnc_cedula, correo, telefono, direccion FROM clients_directory WHERE username = ?", conn, params=(st.session_state.username,))
+    conn.close()
+    st.dataframe(df_dir, use_container_width=True)
+
+# --- PESTAÑA 3: COMPRAS 606 Y CXP ---
+with tabs[3]:
     st.markdown("### 📥 Módulo Compras 606 y Cuentas por Pagar")
     with st.form("form_compra"):
         col1, col2 = st.columns(2)
         with col1:
             rnc_sup = st.text_input("RNC Suplidor")
+            nom_sup = st.text_input("Nombre del Suplidor")
             ncf_comp = st.text_input("NCF / Comprobante")
-            m_fac = st.number_input("Monto Facturado Compras", min_value=0.0, value=5000.0)
         with col2:
+            m_fac = st.number_input("Monto Facturado Compras", min_value=0.0, value=5000.0)
             itb_fac = st.number_input("ITBIS Facturado", min_value=0.0, value=900.0)
             plazo_cxp = st.number_input("Plazo Crédito Pagar (Días)", value=30)
             guardar_606 = st.form_submit_button("📥 Registrar 606 y CxP")
@@ -341,21 +409,21 @@ with tabs[2]:
             conn = sqlite3.connect(DB_PATH)
             cursor = conn.cursor()
             cursor.execute("""
-                INSERT INTO purchases_606 (username, rnc_suplidor, ncf_comprobante, monto_facturado, itbis_facturado, vencimiento, estado, created_at)
-                VALUES (?, ?, ?, ?, ?, ?, 'PendientePago', ?)
-            """, (st.session_state.username, rnc_sup, ncf_comp, m_fac, itb_fac, venc_p, datetime.utcnow().isoformat()))
+                INSERT INTO purchases_606 (username, rnc_suplidor, nombre_suplidor, ncf_comprobante, monto_facturado, itbis_facturado, vencimiento, estado, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, 'PendientePago', ?)
+            """, (st.session_state.username, rnc_sup, nom_sup, ncf_comp, m_fac, itb_fac, venc_p, datetime.utcnow().isoformat()))
             conn.commit()
             conn.close()
             st.success("¡Compra 606 registrada con éxito en Cuentas por Pagar!")
 
-    st.markdown("#### 📋 Listado de Cuentas por Pagar (CxP)")
+    st.markdown("#### 📋 Listado de Cuentas por Pagar (CxP) y Vencimientos")
     conn = sqlite3.connect(DB_PATH)
-    df_cxp = pd.read_sql_query("SELECT id, rnc_suplidor, ncf_comprobante, monto_facturado, itbis_facturado, vencimiento, estado FROM purchases_606 WHERE username = ?", conn, params=(st.session_state.username,))
+    df_cxp = pd.read_sql_query("SELECT id, nombre_suplidor, rnc_suplidor, ncf_comprobante, monto_facturado, itbis_facturado, vencimiento, estado FROM purchases_606 WHERE username = ?", conn, params=(st.session_state.username,))
     conn.close()
     st.dataframe(df_cxp, use_container_width=True)
 
-# --- PESTAÑA 3: FLUJO DE CAJA ---
-with tabs[3]:
+# --- PESTAÑA 4: FLUJO DE CAJA ---
+with tabs[4]:
     st.markdown("### 💵 Flujo de Efectivo (Ingresos y Egresos)")
     with st.form("form_caja"):
         col1, col2 = st.columns(2)
@@ -383,14 +451,14 @@ with tabs[3]:
     conn.close()
     st.dataframe(df_caja, use_container_width=True)
 
-# --- PESTAÑA 4: ASIENTOS DE DIARIO ---
-with tabs[4]:
+# --- PESTAÑA 5: ASIENTOS DE DIARIO ---
+with tabs[5]:
     st.markdown("### 📒 Entradas de Diario (Partida Doble y Ajustes)")
     with st.form("form_diario"):
         col1, col2 = st.columns(2)
         with col1:
             cta_deb = st.text_input("Cuenta Débito (Ej: Efectivo, Gastos Operativos)")
-            cta_cre = st.text_input("Cuenta Crédito (Ej: Cuentas por Pagar, Capital)")
+            cta_cre = st.text_input("Cuenta Crédito (Ej: Cuentas por Pagar, Accionista por Pagar)")
         with col2:
             monto_asiento = st.number_input("Monto Partida", min_value=0.0, value=5000.0)
             concepto_asiento = st.text_input("Concepto o Ajuste a Años Anteriores")
@@ -412,8 +480,8 @@ with tabs[4]:
     conn.close()
     st.dataframe(df_asientos, use_container_width=True)
 
-# --- PESTAÑA 5: ACTIVOS FIJOS ---
-with tabs[5]:
+# --- PESTAÑA 6: ACTIVOS FIJOS ---
+with tabs[6]:
     st.markdown("### 🏛️ Control de Activos Fijos y Depreciación DGII")
     with st.form("form_activo"):
         col1, col2 = st.columns(2)
@@ -441,8 +509,8 @@ with tabs[5]:
     conn.close()
     st.dataframe(df_activos, use_container_width=True)
 
-# --- PESTAÑA 6: ESTADOS FINANCIEROS ---
-with tabs[6]:
+# --- PESTAÑA 7: ESTADOS FINANCIEROS ---
+with tabs[7]:
     st.markdown("### 📈 Estados Financieros (Ingresos, Gastos y Situación)")
     conn = sqlite3.connect(DB_PATH)
     tot_ventas = pd.read_sql_query("SELECT SUM(monto_neto) FROM sales_invoices WHERE username = ?", conn, params=(st.session_state.username,)).iloc[0,0] or 0.0
@@ -462,9 +530,9 @@ with tabs[6]:
     st.write("- **Pasivos Totales (Cuentas por Pagar):** Conciliados")
     st.success(f"- **Capital / Utilidad Acumulada:** RD$ {utilidad_neta:,.2f}")
 
-# --- PESTAÑA 7: ADMIN ---
-if st.session_state.role == "Administrador" and len(tabs) > 7:
-    with tabs[7]:
+# --- PESTAÑA 8: ADMIN ---
+if st.session_state.role == "Administrador" and len(tabs) > 8:
+    with tabs[8]:
         st.markdown("### ⚙️ Panel de Administración y Claves")
         conn = sqlite3.connect(DB_PATH)
         df_users = pd.read_sql_query("SELECT username, full_name, role, rnc_cedula, subscription_status FROM users", conn)
