@@ -511,7 +511,7 @@ elif menu_principal == "🛒 Formato 606 Oficial DGII (Registro, Histórico y Ex
                 periodo_ing = st.text_input("Período Fiscal (AAAAMM)", value="202611")
                 rnc_suplidor_ing = st.text_input("RNC o Cédula del Suplidor", value="101010101")
                 tipo_id_ing = st.selectbox("Tipo ID Suplidor", ["1 - RNC", "2 - Cédula", "3 - Pasaporte"], index=0)
-                tipo_ bienes_ing = st.selectbox("Tipo de Bienes y Servicios Comprados", [
+                tipo_bienes_ing = st.selectbox("Tipo de Bienes y Servicios Comprados", [
                     "01 - GASTOS DE PERSONAL",
                     "02 - GASTOS POR TRABAJOS, SUMINISTROS Y SERVICIOS",
                     "03 - ARRENDAMIENTOS",
@@ -583,7 +583,6 @@ elif menu_principal == "🛒 Formato 606 Oficial DGII (Registro, Histórico y Ex
     with tab_hist_606:
         st.subheader("📋 Histórico Detallado por Factura (Edición y Eliminación)")
         
-        # Filtro por período
         periodo_filtro = st.text_input("Filtrar por Período (AAAAMM):", value="202611")
         
         try:
@@ -599,7 +598,6 @@ elif menu_principal == "🛒 Formato 606 Oficial DGII (Registro, Histórico y Ex
             st.markdown("---")
             st.subheader("✏️ Editar o 🗑️ Borrar Factura Específica")
             
-            factura_ids = df_606_hist['id'].tolist()
             factura_opts = {f"ID: {row['id']} | NCF: {row['ncf_comprobante']} | Suplidor: {row['rnc_suplidor']} | Total: RD$ {row['total_monto_facturado']:,.2f}": row['id'] for _, row in df_606_hist.iterrows()}
             
             sel_fact_str = st.selectbox("Seleccione Factura a Modificar o Eliminar:", list(factura_opts.keys()))
@@ -661,7 +659,6 @@ elif menu_principal == "🛒 Formato 606 Oficial DGII (Registro, Histórico y Ex
                 if not df_exp.empty:
                     output = BytesIO()
                     with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-                        # Crear cabecera institucional idéntica a la plantilla oficial DGII
                         header_info = pd.DataFrame([
                             ["Dirección General de Impuestos Internos", "", "Herramienta de Distribución Gratuita"],
                             ["Formato de Envío de Compras de Bienes y Servicios", "", "Derechos Reservados DGII 2019 ©"],
@@ -670,8 +667,6 @@ elif menu_principal == "🛒 Formato 606 Oficial DGII (Registro, Histórico y Ex
                             ["Cantidad Registros", len(df_exp), ""]
                         ])
                         header_info.to_excel(writer, sheet_name='Formato 606', header=False, index=False, startrow=0)
-                        
-                        # Escribir los datos del 606 a partir de la fila 7
                         df_exp.to_excel(writer, sheet_name='Formato 606', index=False, startrow=6)
                         
                     output.seek(0)
