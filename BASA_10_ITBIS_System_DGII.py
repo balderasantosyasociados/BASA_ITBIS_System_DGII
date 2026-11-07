@@ -1,6 +1,6 @@
 """
 BASA_10_System_DGII - Enterprise Forensic, Tax Intelligence & ITBIS Suite
-Version: 10.0.0-FINAL Enterprise Full Production Replica
+Version: 10.0.0-FINAL Enterprise Full
 Configured for GitHub Deployment & Streamlit Cloud Execution
 """
 
