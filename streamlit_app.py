@@ -7,7 +7,7 @@ Migración Universal de Bases de Datos (Cualquier idioma, formato o sistema de o
 Integración DGII-TS (Validación RNC/Cédula, NCF, e-NCF, Conectividad SOAP, Bulk y Scraping),
 Espejo Funcional Portal Facturador Gratuito DGII (Gestión de Certificados .p12 y Credenciales),
 Recálculo Autónomo de Depreciación, Auditoría NIA y Seguridad Antihacker 100/100.
-Version: 10.9.36-PROD Enterprise Full Production & Universal Continuity Suite (dgii-ts Integrated)
+Version: 10.9.37-PROD Enterprise Full Production & Universal Continuity Suite (dgii-ts Integrated)
 """
 
 import os
@@ -230,27 +230,21 @@ def obtener_siguiente_secuencia_encf() -> str:
     return "E310000000029"  # Continuando exactamente posterior al último respaldo E310000000028
 
 # ==========================================
-# 3. CONFIGURACIÓN DE INTERFAZ STREAMLIT
+# 3. CONFIGURACIÓN DE INTERFAZ STREAMLIT & ESTILOS ESPEJO DGII
 # ==========================================
-SECTORES_CIIU_GLOBALES = [
-    "01 - Sector Agropecuario, Ganadero y Agrícola",
-    "47 - Colmados, Minimarket y Comercio al Detal",
-    "64 - Sector Financiero, Bancario y Prestamistas",
-    "41 - Constructoras e Inmobiliarias",
-    "00 - Industria General y Otros Servicios"
-]
+st.set_page_config(page_title="Facturador Gratuito - Audit Intelligence USA", page_icon="🏛️", layout="wide")
 
-st.set_page_config(page_title="Audit Intelligence USA - DGII-TS & Continuity Suite", page_icon="🏛️", layout="wide")
 st.markdown("""
     <style>
     .main-title { font-size: 26px; font-weight: bold; color: #1F4E78; margin-bottom: 0px; }
     .sub-title { font-size: 15px; color: #4b5563; margin-bottom: 20px; }
     .ai-box { background-color: #f8fafc; padding: 12px; border-left: 4px solid #1e3a8a; border-radius: 4px; margin-bottom: 10px; }
+    .dgii-header { background-color: #ffffff; border-bottom: 2px solid #e5e7eb; padding: 10px; font-weight: 500; }
     </style>
 """, unsafe_allow_html=True)
 
-st.markdown('<p class="main-title">🏛️ Audit Intelligence USA: Suite Integrada con DGII-TS (v0.3.0), Espejo y Edición Full Full</p>', unsafe_allow_html=True)
-st.markdown('<p class="sub-title">Supervisión técnica: <b>Lic. Pedro Baldera</b> | Edición total habilitada para Administradores y Colaboradores | Integración dgii-ts y secuencias exactas.</p>', unsafe_allow_html=True)
+st.markdown('<p class="main-title">🏛️ Facturador Gratuito & Audit Intelligence USA (v0.3.0 - DGII-TS)</p>', unsafe_allow_html=True)
+st.markdown('<p class="sub-title">Supervisión técnica: <b>Lic. Pedro Baldera</b> | Espejo Funcional Portal FG integrado | Edición Full Full activa.</p>', unsafe_allow_html=True)
 
 # Gestión de Sesión
 if "authenticated" not in st.session_state:
@@ -316,8 +310,8 @@ with tabs[0]:
     
     st.markdown("""
         <div class="ai-box">
-            <h4>🚀 Sistema Actualizado con Edición Full Full e Interactiva</h4>
-            <p>Se han habilitado los botones de <b>Editar</b>, <b>Borrar</b> y <b>Guardar</b> en todo el sistema. El sistema busca de forma automática en la DGII la última secuencia utilizada para asignar el e-NCF exacto continuo, permitiendo alternar entre emisión automática o actualización de histórico.</p>
+            <h4>🚀 Sistema Actualizado con Espejo Facturador Gratuito y Edición Full Full</h4>
+            <p>Se han incorporado las directivas oficiales de la interfaz Angular/Material del Facturador Gratuito con control de caché estricta y parámetros de versión <code>v=03112026122007</code>, permitiendo edición total y cálculo exacto de secuencias.</p>
         </div>
     """, unsafe_allow_html=True)
 
