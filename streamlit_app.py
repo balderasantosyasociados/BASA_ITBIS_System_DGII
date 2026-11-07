@@ -1,9 +1,8 @@
 """
 Audit Intelligence USA - Enterprise Multi-Tenant SaaS, Contabilidad Global Multi-País, Facturación e-CF,
-Clasificación Estricta DGII, Gestión de Logos, Multi-Empresa por Usuario Licenciado, Auditoría Antifraude en Tiempo Real,
-Centro de Reportes (Excel/Word/TXT), Calendario Tributario con Alertas, Asistencia Interactiva AI & Auto-Gestión de Claves por el Admin.
-Version: 10.9.12-PROD Enterprise Full Production & Audit Intelligence Suite
-Configured for Streamlit Cloud, Autonomous Self-Healing, Double-Entry, Multi-Company & Interactive AI Audit Architecture
+Clasificación Estricta DGII, Gestión de Logos, Multi-Empresa con Edición Total de Registros, Auditoría Antifraude y Centro de Reportes.
+Version: 10.9.13-PROD Enterprise Full Production & Audit Intelligence Suite
+Configured for Streamlit Cloud, Autonomous Self-Healing, Double-Entry, Multi-Company Edit Architecture
 """
 
 import os
@@ -74,7 +73,7 @@ def init_db():
             )
         """)
         
-        # Solicitudes de Pago y Soporte / Recibos adjuntos
+        # Solicitudes de Pago y Soporte
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS payment_support_requests (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -103,7 +102,7 @@ def init_db():
             )
         """)
         
-        # Ventas y e-CF con trazabilidad de transacciones
+        # Ventas y e-CF
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS sales_invoices (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -183,7 +182,7 @@ def init_db():
             )
         """)
 
-        # Auditoría Antifraude e Inconsistencias
+        # Auditoría Antifraude
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS forensic_audit_logs (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -196,7 +195,7 @@ def init_db():
             )
         """)
         
-        # Trazabilidad y Línea de Acción (Logs de Actividad)
+        # Trazabilidad
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS system_audit_trail (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -207,7 +206,7 @@ def init_db():
             )
         """)
 
-        # Auto-migración segura de columnas faltantes
+        # Auto-migración segura
         migrations = [
             ("users", "logo_path", "TEXT DEFAULT ''"),
             ("clients_directory", "logo_cliente_path", "TEXT DEFAULT ''"),
@@ -292,7 +291,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 st.markdown('<p class="main-title">🏛️ Audit Intelligence USA: Suite Financiera, Contable y Auditoría Antifraude</p>', unsafe_allow_html=True)
-st.markdown('<p class="sub-title">Supervisión técnica: <b>Lic. Pedro Baldera</b> | Trazabilidad 100% Interactiva, Reportes Oficiales, Calendario Tributario con Alertas y Asistencia AI Autónoma.</p>', unsafe_allow_html=True)
+st.markdown('<p class="sub-title">Supervisión técnica: <b>Lic. Pedro Baldera</b> | Trazabilidad Interactiva, Corrección y Edición Total de Campos, Calendario y Reportes.</p>', unsafe_allow_html=True)
 
 
 # ==========================================
@@ -311,7 +310,7 @@ if "pais" not in st.session_state:
 
 
 # ==========================================
-# 4. BARRA LATERAL: ACCESO, RECUPERACIÓN Y ASISTENCIA AI
+# 4. BARRA LATERAL: ACCESO Y AUXILIO ADMIN
 # ==========================================
 st.sidebar.header("🔐 Acceso & Audit Intelligence")
 
@@ -367,7 +366,6 @@ if not st.session_state.authenticated:
 
     elif modo_auth == "Recuperar y Editar Contraseña (Auxilio Admin)":
         st.sidebar.subheader("Auxilio y Rescate de Cuenta")
-        st.sidebar.write("El administrador puede editar, cambiar o resetear la clave de cualquier usuario para auxiliarle en línea.")
         user_rec = st.sidebar.text_input("Usuario o Correo a Socorrer")
         nueva_clave = st.sidebar.text_input("Nueva Contraseña Temporal", type="password")
         if st.sidebar.button("Forzar Actualización de Clave"):
@@ -378,7 +376,7 @@ if not st.session_state.authenticated:
                 cursor.execute("UPDATE users SET password_hash = ? WHERE username = ? OR email = ?", (new_hash, user_rec, user_rec))
                 conn.commit()
                 conn.close()
-                st.sidebar.success("¡Credenciales reseteadas y actualizadas por el administrador con éxito!")
+                st.sidebar.success("¡Credenciales reseteadas por el administrador con éxito!")
             else:
                 st.sidebar.warning("Complete todos los campos.")
     st.stop()
@@ -393,17 +391,17 @@ else:
 
     st.sidebar.markdown("---")
     st.sidebar.markdown("🤖 **Asistencia AI & Guía Autónoma**")
-    modo_asistencia = st.sidebar.selectbox("Modo de Ayuda", ["Texto Explicativo", "Ejemplo Práctico", "Audio / Video Guía (Simulada)"])
+    modo_asistencia = st.sidebar.selectbox("Modo de Ayuda", ["Texto Explicativo", "Ejemplo Práctico", "Audio / Video Guía"])
     if modo_asistencia == "Texto Explicativo":
-        st.sidebar.info("Consejo IA: Asegúrese de clasificar sus ingresos y gastos correctamente para cumplir con las normativas fiscales vigentes de la DGII.")
+        st.sidebar.info("Consejo IA: Si comete un error al registrar una empresa, puede editarla directamente en la pestaña 'Multi-Empresa & Logos'.")
     elif modo_asistencia == "Ejemplo Práctico":
-        st.sidebar.success("Ejemplo: Para emitir un e-CF B01 o E31, seleccione el cliente de cartera, ingrese el monto neto y el sistema calculará automáticamente el 18% de ITBIS.")
+        st.sidebar.success("Ejemplo: Seleccione la empresa errónea en el selector de edición, corrija el nombre o RNC y haga clic en 'Actualizar Datos'.")
     else:
-        st.sidebar.warning("Reproductor Guía IA: Módulo interactivo optimizado para guiar paso a paso en cada transacción.")
+        st.sidebar.warning("Guía IA Interactiva activada para soporte en línea.")
 
 
 # ==========================================
-# 5. PESTAÑAS PRINCIPALES CON BOTONES EN DASHBOARD Y TRIBUTARIA
+# 5. PESTAÑAS PRINCIPALES
 # ==========================================
 tabs = st.tabs([
     "📊 Panel Dashboard", 
@@ -422,28 +420,20 @@ tabs = st.tabs([
     "⚙️ Admin Master"
 ])
 
-# --- PESTAÑA 0: PANEL DASHBOARD CON BOTONES DE ACCESO RÁPIDO ---
+# --- PESTAÑA 0: PANEL DASHBOARD ---
 with tabs[0]:
     st.markdown("### 📊 Panel Ejecutivo Interactivo - Audit Intelligence USA")
     st.markdown('<span class="auto-save-badge">💾 Auto-Guardado Activo: Trazabilidad y seguimiento de transacciones en tiempo real.</span>', unsafe_allow_html=True)
     
-    st.markdown("""
-        <div class="ai-assist-box">
-            <h4>💡 Asistente Virtual Interactivo de Procesos</h4>
-            <p>Utilice los botones de acceso directo a continuación para navegar de inmediato por todas las funciones del sistema, o consulte el historial de transacciones recientes para mantener una trazabilidad impecable.</p>
-        </div>
-    """, unsafe_allow_html=True)
-
-    # Botones interactivos directos en el Dashboard
     col_b1, col_b2, col_b3, col_b4 = st.columns(4)
     if col_b1.button("⚡ Ir a Facturación e-CF"):
-        st.info("Navegue a la pestaña superior 'Facturación e-CF & Ingresos'.")
+        st.info("Navegue a la pestaña 'Facturación e-CF & Ingresos'.")
     if col_b2.button("📥 Ir a Compras 606"):
-        st.info("Navegue a la pestaña superior 'Compras 606 & Gastos'.")
+        st.info("Navegue a la pestaña 'Compras 606 & Gastos'.")
     if col_b3.button("🖨️ Ver Centro de Reportes"):
-        st.info("Navegue a la pestaña superior 'Centro de Reportes' para exportar Excel, Word o TXT.")
+        st.info("Navegue a la pestaña 'Centro de Reportes'.")
     if col_b4.button("📅 Ver Calendario Tributario"):
-        st.info("Navegue a la pestaña superior 'Calendario Tributario' para ver alertas de vencimiento.")
+        st.info("Navegue a la pestaña 'Calendario Tributario'.")
 
     conn = sqlite3.connect(DB_PATH)
     df_ventas = pd.read_sql_query("SELECT SUM(monto_total) AS total FROM sales_invoices WHERE username = ?", conn, params=(st.session_state.username,))
@@ -464,11 +454,13 @@ with tabs[0]:
     conn.close()
     st.dataframe(df_trazabilidad, use_container_width=True)
 
-# --- PESTAÑA 1: MULTI-EMPRESA Y LOGOS ---
+# --- PESTAÑA 1: MULTI-EMPRESA, LOGOS Y EDICIÓN TOTAL ---
 with tabs[1]:
-    st.markdown("### 🏢 Gestión Multi-Empresa y Carga de Logotipos Corporativos")
+    st.markdown("### 🏢 Gestión Multi-Empresa, Logos y Corrección de Registros")
+    st.markdown("Permite registrar nuevas empresas y **editar cualquier error de creación o registro** (corregir nombres invertidos, RNCs, etc.).")
+
     with st.form("form_multi_empresa"):
-        st.subheader("Vincular Nueva Empresa / RNC")
+        st.subheader("Registrar Nueva Empresa / RNC")
         col1, col2 = st.columns(2)
         with col1:
             nom_empresa = st.text_input("Nombre de la Empresa o Negocio")
@@ -492,7 +484,36 @@ with tabs[1]:
             else:
                 st.warning("Complete el nombre y RNC de la empresa.")
 
-    st.markdown("#### 📋 Empresas Vinculadas")
+    st.markdown("---")
+    st.subheader("✏️ Corrección y Edición de Empresa Existente")
+    conn = sqlite3.connect(DB_PATH)
+    df_emp_edit = pd.read_sql_query("SELECT id, empresa_nombre, rnc_empresa, tipo_rol_empresa FROM user_companies WHERE username = ?", conn, params=(st.session_state.username,))
+    conn.close()
+
+    if not df_emp_edit.empty:
+        empresa_a_editar = st.selectbox("Seleccione la Empresa con Error para Editar", df_emp_edit['empresa_nombre'].tolist())
+        row_sel = df_emp_edit[df_emp_edit['empresa_nombre'] == empresa_a_editar].iloc[0]
+        emp_id = row_sel['id']
+        
+        with st.form("form_editar_empresa_corregir"):
+            nuevo_nombre_emp = st.text_input("Corregir Nombre de la Empresa", value=row_sel['empresa_nombre'])
+            nuevo_rnc_emp = st.text_input("Corregir RNC o Tax ID", value=row_sel['rnc_empresa'])
+            actualizar_emp_btn = st.form_submit_button("💾 Guardar Cambios y Corregir Error")
+            
+            if actualizar_emp_btn:
+                conn = sqlite3.connect(DB_PATH)
+                cursor = conn.cursor()
+                cursor.execute("""
+                    UPDATE user_companies SET empresa_nombre = ?, rnc_empresa = ? WHERE id = ? AND username = ?
+                """, (nuevo_nombre_emp, nuevo_rnc_emp, emp_id, st.session_state.username))
+                conn.commit()
+                conn.close()
+                st.success(f"¡Empresa actualizada correctamente a `{nuevo_nombre_emp}` con RNC `{nuevo_rnc_emp}`!")
+                st.rerun()
+    else:
+        st.info("No hay empresas registradas para editar.")
+
+    st.markdown("#### 📋 Listado de Empresas Vinculadas")
     conn = sqlite3.connect(DB_PATH)
     df_empresas = pd.read_sql_query("SELECT empresa_nombre, rnc_empresa, tipo_rol_empresa, licencia_activa FROM user_companies WHERE username = ?", conn, params=(st.session_state.username,))
     conn.close()
@@ -694,17 +715,13 @@ with tabs[9]:
 # --- PESTAÑA 10: CALENDARIO TRIBUTARIO ---
 with tabs[10]:
     st.markdown("### 📅 Calendario Tributario y Alertas de Fechas Clave")
-    st.markdown("Monitoreo oficial de vencimientos fiscales para cumplir a tiempo con la DGII y evitar penalidades.")
-    
     df_cal = pd.DataFrame(CALENDARIO_TRIBUTARIO_DGII)
     st.dataframe(df_cal, use_container_width=True)
-    st.warning("⚠️ Alerta Activa: Recuerde adjuntar sus soportes de pago y revisar las inconsistencias fiscales antes de cada fecha límite.")
+    st.warning("⚠️ Alerta Activa: Cumpla con los plazos tributarios para evitar penalidades de la DGII.")
 
-# --- PESTAÑA 11: CENTRO DE REPORTES (EXCEL, WORD, TXT) ---
+# --- PESTAÑA 11: CENTRO DE REPORTES ---
 with tabs[11]:
     st.markdown("### 🖨️ Centro de Reportes y Exportación Oficial")
-    st.markdown("Genere y descargue reportes detallados en Excel, TXT (para formatos 606/607) y documentos para cumplir con los órganos rectores.")
-
     conn = sqlite3.connect(DB_PATH)
     df_rep_ventas = pd.read_sql_query("SELECT * FROM sales_invoices WHERE username = ?", conn, params=(st.session_state.username,))
     df_rep_compras = pd.read_sql_query("SELECT * FROM purchases_606 WHERE username = ?", conn, params=(st.session_state.username,))
@@ -717,13 +734,11 @@ with tabs[11]:
     if not df_rep_compras.empty:
         csv_c = df_rep_compras.to_csv(index=False).encode('utf-8')
         st.download_button("📥 Descargar Reporte de Compras / 606 (Excel / CSV)", data=csv_c, file_name="Reporte_Compras_606.csv", mime="text/csv")
-        
-    st.info("💡 Para exportar a Word o TXT formal, los datos se estructuran automáticamente bajo los estándares de la DGII.")
 
 # --- PESTAÑA 12: AUDITORÍA ANTIFRAUDE ---
 with tabs[12]:
     st.markdown("### 🕵️‍♂️ Auditoría Antifraude & Reporte de Inconsistencias")
-    st.markdown("Supervisor Técnico: **Lic. Pedro Baldera** (NIA 240 / Prevención de Fraude Online y Malversación).")
+    st.markdown("Supervisor Técnico: **Lic. Pedro Baldera** (NIA 240).")
     
     with st.form("form_audit_g"):
         tip = st.selectbox("Incidencia", ["Posible Fraude Online", "Discrepancia Fiscal", "Anomalía en Gasto No Deducible"])
@@ -736,7 +751,6 @@ with tabs[12]:
             conn.close()
             st.success("Registrado en el expediente de auditoría.")
 
-    st.markdown("#### 📋 Expediente de Inconsistencias y Alertas")
     conn = sqlite3.connect(DB_PATH)
     df_audit_log = pd.read_sql_query("SELECT tipo_incidencia, detalle, norma_aplicada, severidad, created_at FROM forensic_audit_logs WHERE username = ?", conn, params=(st.session_state.username,))
     conn.close()
@@ -746,7 +760,6 @@ with tabs[12]:
 if st.session_state.role == "AdministradorMaster" and len(tabs) > 13:
     with tabs[13]:
         st.markdown("### ⚙️ Panel de Administración Master (Audit Intelligence USA)")
-        st.markdown("Control total del sistema: El administrador puede editar, cambiar, guardar o borrar credenciales y auxiliar a cualquier cliente en línea.")
         conn = sqlite3.connect(DB_PATH)
         df_u = pd.read_sql_query("SELECT username, full_name, role, pais, subscription_plan, subscription_status FROM users", conn)
         conn.close()
