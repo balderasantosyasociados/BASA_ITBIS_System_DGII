@@ -1,8 +1,8 @@
 """
-ITBIS_SISTEM_DGII_FULL - Enterprise Multi-Tenant SaaS, Contabilidad Global Multi-País, Facturación Electrónica e-CF,
-Audit Intelligence USA, Clasificación Estricta DGII, Gestión de Logos, Multi-Empresa por Usuario Licenciado y Autonomía Total.
-Version: 10.9.10-PROD Enterprise Full Production & Audit Intelligence Suite
-Configured for Streamlit Cloud, Autonomous Self-Healing, Double-Entry, Multi-Company & Multi-Branding Enterprise Architecture
+Audit Intelligence USA - Enterprise Multi-Tenant SaaS, Contabilidad Global Multi-País, Facturación e-CF,
+Clasificación Estricta DGII, Gestión de Logos, Multi-Empresa por Usuario Licenciado y Auto-Migración Segura.
+Version: 10.9.11-PROD Enterprise Full Production & Audit Intelligence Suite
+Configured for Streamlit Cloud, Autonomous Self-Healing, Double-Entry, Multi-Company & Auto-Migration Safety
 """
 
 import os
@@ -19,7 +19,7 @@ import pandas as pd
 import openpyxl
 
 # ==========================================
-# 1. CONFIGURACIÓN DE LOGS Y BASE DE DATOS GLOBAL
+# 1. CONFIGURACIÓN DE LOGS Y BASE DE DATOS GLOBAL (AUTO-MIGRACIÓN)
 # ==========================================
 logging.basicConfig(
     level=logging.INFO,
@@ -35,39 +35,39 @@ def init_db():
         conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
         
-        # Configuración General y Logos del Sistema
+        # Configuración General
         cursor.execute("CREATE TABLE IF NOT EXISTS system_config (key TEXT PRIMARY KEY, value TEXT NOT NULL)")
         
-        # Usuarios Globales: Soporte Multi-Empresa, Credenciales Propias y Licenciamiento al Día
+        # Usuarios Globales
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS users (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 username TEXT UNIQUE NOT NULL,
                 password_hash TEXT NOT NULL,
                 full_name TEXT NOT NULL,
-                role TEXT NOT NULL, -- AdministradorMaster, ContadorExterno, Facturador, ClientePropietario
+                role TEXT NOT NULL,
                 rnc_cedula TEXT NOT NULL,
                 email TEXT UNIQUE NOT NULL,
                 phone TEXT NOT NULL,
                 pais TEXT NOT NULL,
                 idioma TEXT NOT NULL DEFAULT 'Español',
                 subscription_plan TEXT NOT NULL,
-                subscription_status TEXT NOT NULL, -- Activo, Vencido, Exonerado
+                subscription_status TEXT NOT NULL,
                 is_facturable INTEGER NOT NULL DEFAULT 1,
                 parent_owner TEXT NOT NULL DEFAULT 'admin',
-                logo_path TEXT DEFAULT '', -- Logo personalizado del cliente o empresa
+                logo_path TEXT DEFAULT '',
                 created_at TEXT NOT NULL
             )
         """)
         
-        # Vinculación Multi-Empresa por Usuario Licenciado (Permite a un contador o facturador gestionar N empresas)
+        # Vinculación Multi-Empresa
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS user_companies (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 username TEXT NOT NULL,
                 empresa_nombre TEXT NOT NULL,
                 rnc_empresa TEXT NOT NULL,
-                tipo_rol_empresa TEXT NOT NULL, -- Facturador o Contador
+                tipo_rol_empresa TEXT NOT NULL,
                 licencia_activa INTEGER NOT NULL DEFAULT 1,
                 created_at TEXT NOT NULL
             )
@@ -101,7 +101,7 @@ def init_db():
             )
         """)
         
-        # Ventas, e-CF / e-NCF y Clasificación de Ingresos DGII
+        # Ventas y e-CF
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS sales_invoices (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -121,7 +121,7 @@ def init_db():
             )
         """)
         
-        # Compras 606 y Clasificación Estricta de Gastos DGII
+        # Compras 606
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS purchases_606 (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -181,7 +181,7 @@ def init_db():
             )
         """)
 
-        # Auditoría Antifraude y Autonomía
+        # Auditoría Antifraude
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS forensic_audit_logs (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -194,18 +194,25 @@ def init_db():
             )
         """)
 
-        # Auto-migración y blindaje de esquema seguro
+        # Auto-migración segura de columnas faltantes en tablas existentes
         migrations = [
             ("users", "logo_path", "TEXT DEFAULT ''"),
             ("clients_directory", "logo_cliente_path", "TEXT DEFAULT ''"),
             ("sales_invoices", "empresa_asociada", "TEXT DEFAULT 'Principal'"),
-            ("purchases_606", "empresa_asociada", "TEXT DEFAULT 'Principal'")
+            ("sales_invoices", "tipo_ncf_ecf", "TEXT DEFAULT 'E31 - e-NCF Crédito Fiscal'"),
+            ("sales_invoices", "clasificacion_ingreso_dgii", "TEXT DEFAULT 'Ingresos Operacionales'"),
+            ("sales_invoices", "estado_dgii", "TEXT DEFAULT 'BorradorDuplicado'"),
+            ("purchases_606", "empresa_asociada", "TEXT DEFAULT 'Principal'"),
+            ("purchases_606", "clasificacion_gasto_dgii", "TEXT DEFAULT 'Gastos Operativos'"),
+            ("purchases_606", "retencion_ir17", "REAL DEFAULT 0.0"),
+            ("purchases_606", "archivo_adjunto_info", "TEXT DEFAULT ''")
         ]
+        
         for table, col, col_def in migrations:
             try:
                 cursor.execute(f"ALTER TABLE {table} ADD COLUMN {col} {col_def}")
             except sqlite3.OperationalError:
-                pass
+                pass # La columna ya existe, se ignora de forma segura
 
         # Admin por defecto (Lic. Pedro Baldera)
         cursor.execute("SELECT COUNT(*) FROM users WHERE role = 'AdministradorMaster'")
@@ -213,8 +220,8 @@ def init_db():
             admin_pass_hash = hashlib.sha256("AdminBASA2026*".encode()).hexdigest()
             cursor.execute("""
                 INSERT INTO users (username, password_hash, full_name, role, rnc_cedula, email, phone, pais, idioma, subscription_plan, subscription_status, is_facturable, parent_owner, logo_path, created_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """, ("admin", admin_pass_hash, "Lic. Pedro Baldera - Admin Master Global", "AdministradorMaster", "131-0000000-1", "admin@auditintelligence.com", "+18095550000", "República Dominicana", "Español", "Exonerado", "Activo", 1, "system", "", datetime.utcnow().isoformat()))
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'Español', ?, 'Activo', 1, 'admin', '', ?)
+            """, ("admin", admin_pass_hash, "Lic. Pedro Baldera - Admin Master Global", "AdministradorMaster", "131-0000000-1", "admin@auditintelligence.com", "+18095550000", "República Dominicana", "Exonerado", datetime.utcnow().isoformat()))
 
         conn.commit()
         conn.close()
@@ -282,7 +289,7 @@ if "pais" not in st.session_state:
 
 
 # ==========================================
-# 4. BARRA LATERAL: ACCESO, RECUPERACIÓN Y GESTIÓN DE CREDENCIALES
+# 4. BARRA LATERAL: ACCESO Y RECUPERACIÓN
 # ==========================================
 st.sidebar.header("🔐 Acceso & Audit Intelligence")
 
@@ -503,7 +510,7 @@ with tabs[2]:
     conn.close()
     st.dataframe(df_ventas_g, use_container_width=True)
 
-# --- PESTAÑA 2: CARTERA DE CLIENTES ---
+# --- PESTAÑA 3: CARTERA DE CLIENTES ---
 with tabs[3]:
     st.markdown("### 👥 Cartera de Clientes y Logos Personalizados")
     with st.form("form_cartera_global"):
