@@ -318,8 +318,8 @@ if st.session_state.role == "Administrador":
 
 tabs = st.tabs(tabs_list)
 
-engine = ITBISSistemEngine(st.session_state.username, st.session_state.rnc_contribuyente, st.session_state.pais)
-
+rnc_val = st.session_state.get("rnc_cedula", "131-0000000-1")
+engine = ITBISSistemEngine(st.session_state.username, rnc_val, st.session_state.pais)
 with tabs[0]:
     st.markdown(f"### 📈 Resumen Ejecutivo ({st.session_state.pais} - {config_pais['moneda']})")
     st.info(f"Marco Legal: **{config_pais['ley_principal']}** | Tasa IVA/ITBIS: **{config_pais['tasa_iva']*100}%** | Suscripción: **US$ 69.00 / mes**")
