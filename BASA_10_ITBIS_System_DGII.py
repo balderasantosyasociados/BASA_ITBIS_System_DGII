@@ -1,7 +1,7 @@
 """
 ITBIS_SISTEM_DGII_FULL - Enterprise Multi-Tenant SaaS, Fiscal, Autonomous IA & Multi-País Suite
-Version: 10.8.0-PROD Enterprise Full Production & Integrity Verified
-Configured for Streamlit Cloud, Autonomous Self-Healing, Role-Based Access & Master Support
+Version: 10.9.0-PROD Enterprise Full Production, Integrity Verified & Master Key Integration
+Configured for Streamlit Cloud, Autonomous Self-Healing, Role-Based Access & Master Key Management
 """
 
 import os
@@ -60,7 +60,7 @@ def init_db():
             )
         """)
         
-        # Tabla de transacciones fiscales aisladas por usuario (Garantiza que clientes solo vean su data)
+        # Tabla de transacciones fiscales aisladas por usuario
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS dgii_tax_returns (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -87,7 +87,7 @@ def init_db():
             )
         """)
         
-        # Tabla de snapshots para recuperación ante fallos (Rollback con salvaguarda de datos)
+        # Tabla de snapshots para recuperación ante fallos (Rollback)
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS system_snapshots (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -105,6 +105,14 @@ def init_db():
                 INSERT INTO users (username, password_hash, full_name, role, rnc_cedula, email, phone, pais, subscription_status, subscription_expiry, created_at)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, ("admin", admin_pass_hash, "Administrador Master ITBIS", "Administrador", "131-0000000-1", "admin@itbissystem.com", "+18095550000", "República Dominicana", "ActivoPagado69", "2099-12-31", datetime.utcnow().isoformat()))
+
+        # Generar o asegurar Token Master en system_config
+        cursor.execute("SELECT value FROM system_config WHERE key = 'admin_token_hash'")
+        if not cursor.fetchone():
+            master_token = secrets.token_hex(32)
+            master_hash = hashlib.sha256(master_token.encode()).hexdigest()
+            cursor.execute("INSERT OR REPLACE INTO system_config (key, value) VALUES (?, ?)", ("admin_token_hash", master_hash))
+            logger.info(f"Token Master de Administración generado: {master_token}")
 
         conn.commit()
         conn.close()
@@ -144,7 +152,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 st.markdown('<p class="main-title">🇩🇴 ITBIS SISTEM DGII FULL: Plataforma Fiscal, Multi-País y Autónoma</p>', unsafe_allow_html=True)
-st.markdown('<p class="sub-title">Sistema integral de pago por uso (US$ 69/mes), control estricto por roles, soporte y recuperación por cédula/ID, RNC, correo o celular, guía interactiva y mejoras autónomas con IA.</p>', unsafe_allow_html=True)
+st.markdown('<p class="sub-title">Sistema integral de pago por uso (US$ 69/mes), control estricto por roles, visualización de claves, recuperación por cédula, RNC, correo o celular, guía interactiva y mejoras autónomas con IA.</p>', unsafe_allow_html=True)
 
 
 # ==========================================
@@ -311,7 +319,7 @@ if st.session_state.role == "Administrador":
 
 tabs = st.tabs(tabs_list)
 
-engine = ITBISSistemEngine(st.session_state.username, st.session_state.rnc_contribuyente, st.session_state.pais)
+engine = ITBISSistemEngine(st.session_state.username, st.session_state.rnc_cedula, st.session_state.pais)
 
 with tabs[0]:
     st.markdown(f"### 📈 Resumen Ejecutivo ({st.session_state.pais} - {config_pais['moneda']})")
@@ -334,7 +342,7 @@ with tabs[1]:
     monto_op = st.number_input("Total Operaciones del Periodo", value=150000.0)
     res_fiscal = engine.calcular_impuesto(monto_op)
     
-    st.success(f"Cálculo Exitoso: Base: {res_fiscal['moneda']} {res_fiscal['monto_base']:,.2f} | Impuesto ({res_fiscal['tasa_%'] if 'tasa_%' in res_fiscal else res_fiscal['tasa']}%): {res_fiscal['moneda']} {res_fiscal['impuesto']:,.2f}")
+    st.success(f"Cálculo Exitoso: Base: {res_fiscal['moneda']} {res_fiscal['monto_base']:,.2f} | Impuesto ({res_fiscal['tasa']}%): {res_fiscal['moneda']} {res_fiscal['impuesto']:,.2f}")
 
 with tabs[2]:
     st.markdown("### 📥 Módulo 606: Compras y Gastos")
@@ -347,7 +355,6 @@ with tabs[3]:
     st.markdown("### ⚡ Módulo e-NCF: Facturación Electrónica de Ventas")
     st.write("Gestión de Comprobantes Fiscales Electrónicos emitidos por su empresa.")
     
-    # Aislamiento de datos: Muestra solo los registros del usuario autenticado
     df_ventas = pd.DataFrame([
         {"e-NCF": "E310000000015", "Tipo": "Crédito Fiscal", "Monto": 7500.0, "ITBIS": 1350.0, "Usuario": st.session_state.username},
         {"e-NCF": "E320000000001", "Tipo": "Consumo", "Monto": 142500.0, "ITBIS": 25650.0, "Usuario": st.session_state.username}
@@ -388,45 +395,4 @@ def funcion_mejora_usuario():
 
     if st.session_state.role in ["Administrador", "Colaborador"]:
         st.markdown("#### 🛠️ Validación y Aplicación (Rol Administrativo)")
-        id_mej = st.number_input("ID de Mejora a Gestionar", min_value=1, step=1)
-        col_a, col_b = st.columns(2)
-        with col_a:
-            if st.button("✅ Aceptar y Aplicar Mejora"):
-                conn = sqlite3.connect(DB_PATH)
-                cursor = conn.cursor()
-                cursor.execute("INSERT INTO system_snapshots (snapshot_name, backup_info, created_at) VALUES (?, ?, ?)", 
-                               ("Snapshot Pre-Aplicacion Mejora", "Respaldo completo de configuraciones y base de datos", datetime.utcnow().isoformat()))
-                cursor.execute("UPDATE ai_code_improvements SET status = 'AceptadoYAplicado', applied_at = ? WHERE id = ?", (datetime.utcnow().isoformat(), id_mej))
-                conn.commit()
-                conn.close()
-                st.success(f"Mejora #{id_mej} aceptada y aplicada con respaldo automático (Rollback) creado.")
-        with col_b:
-            if st.button("🔄 Rollback: Restaurar Versión y Datos Anteriores"):
-                conn = sqlite3.connect(DB_PATH)
-                cursor = conn.cursor()
-                cursor.execute("UPDATE ai_code_improvements SET status = 'RevertidoRollback' WHERE id = ?", (id_mej,))
-                conn.commit()
-                conn.close()
-                st.warning("¡Sistema restaurado a la configuración anterior con salvaguarda total de todos los datos registrados!")
-
-# Pestaña exclusiva de administración para gestionar claves, permisos y soporte
-if st.session_state.role == "Administrador" and len(tabs) > 5:
-    with tabs[5]:
-        st.markdown("### ⚙️ Panel de Administración Master, Claves y Soporte")
-        st.write("Gestión exclusiva para administradores: control de claves master, permisos de colaboradores, clientes y revisión de soporte a empresas.")
-        
-        conn = sqlite3.connect(DB_PATH)
-        df_clients = pd.read_sql_query("SELECT id, username, full_name, role, rnc_cedula, email, phone, pais, subscription_status, subscription_expiry FROM users", conn)
-        conn.close()
-        st.dataframe(df_clients, use_container_width=True)
-        
-        st.markdown("#### 🔑 Concesión de Permisos y Roles")
-        target_user = st.text_input("Nombre de Usuario a Modificar")
-        nuevo_rol_adm = st.selectbox("Nuevo Rol Asignado", ["Administrador", "Colaborador", "Cliente", "PruebaGratis7Dias"])
-        if st.button("Guardar Cambios de Permisos"):
-            conn = sqlite3.connect(DB_PATH)
-            cursor = conn.cursor()
-            cursor.execute("UPDATE users SET role = ? WHERE username = ?", (nuevo_rol_adm, target_user))
-            conn.commit()
-            conn.close()
-            st.success(f"Permisos del usuario `{target_user}` actualizados exitosamente a `{nuevo_rol_adm}`.")
+        id_mej = st.number_input("ID de Mejora a Gestionar", min_value=1,
