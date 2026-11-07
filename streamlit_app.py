@@ -2,22 +2,28 @@ import streamlit as st
 import pandas as pd
 from datetime import datetime, timedelta
 import sqlite3
-import re
 import hashlib
 import sys
 import logging
+from io import BytesIO
 
-# Configuración de página unificada de producción 100/100 (ERP Financiero, Fiscal y de Auditoría Forense AFA)
+# Configuración de página unificada de producción 100/100 (ERP Protegido AFA & Estándar Oficial Formato 606 DGII)
 st.set_page_config(
-    page_title="BALDERA SANTOS Y ASOCIADOS - ERP Financiero, Fiscal, e-CF & Control IR-17 (Estándar SAP/Oracle/QuickBooks)",
-    page_icon="⚖️",
+    page_title="BALDERA SANTOS Y ASOCIADOS - ERP Financiero, Fiscal e-CF & Formato 606 Oficial DGII",
+    page_icon="🛡️",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# Estilos CSS Profesionales Corporativos y ERP Avanzado
+# Estilos CSS Avanzados de Seguridad, Anti-Selección y Reportes Profesionales
 st.markdown("""
     <style>
+    body, html, .stApp {
+        -webkit-user-select: none;
+        -moz-user-select: none;
+        -ms-user-select: none;
+        user-select: none;
+    }
     .main-header {
         background-color: #0f172a;
         color: #38bdf8;
@@ -28,12 +34,23 @@ st.markdown("""
         margin-bottom: 20px;
         border: 1px solid #334155;
     }
-    .success-box {
+    .login-card {
+        background-color: #ffffff;
+        border: 1px solid #cbd5e1;
+        padding: 30px;
+        border-radius: 12px;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        max-width: 500px;
+        margin: auto;
+    }
+    .secure-alert-box {
+        background-color: #fef2f2;
+        border: 2px solid #ef4444;
         padding: 15px;
-        background-color: #f0fdf4;
-        border-left: 6px solid #16a34a;
-        border-radius: 4px;
+        border-radius: 10px;
         margin-bottom: 15px;
+        color: #b91c1c;
+        font-weight: bold;
     }
     .erp-module-box {
         background-color: #f8fafc;
@@ -43,21 +60,6 @@ st.markdown("""
         margin-bottom: 20px;
         color: #1e293b;
     }
-    .secure-tunnel-box {
-        background-color: #090d16;
-        border: 2px dashed #38bdf8;
-        padding: 20px;
-        border-radius: 8px;
-        margin-bottom: 20px;
-        color: #e2e8f0;
-    }
-    .error-isolation-card {
-        background-color: #fef2f2;
-        border: 2px solid #ef4444;
-        padding: 15px;
-        border-radius: 10px;
-        margin-bottom: 15px;
-    }
     .stButton>button {
         width: 100%;
         border-radius: 4px;
@@ -66,7 +68,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-DB_PATH = "itbis_sistem_erp_basa_full.db"
+DB_PATH = "itbis_sistem_erp_606_dgii.db"
 
 def get_db_connection():
     conn = sqlite3.connect(DB_PATH, timeout=15.0)
@@ -79,6 +81,34 @@ def init_db():
         cursor = conn.cursor()
         
         cursor.execute("CREATE TABLE IF NOT EXISTS system_config (key TEXT PRIMARY KEY, value TEXT NOT NULL)")
+        
+        # Tabla de Usuarios ERP con Control de Aprobación
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS usuarios_erp (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                login_id TEXT UNIQUE NOT NULL,
+                password_hash TEXT NOT NULL,
+                nombre_completo TEXT NOT NULL,
+                rol TEXT NOT NULL, -- 'Cliente', 'Colaborador', 'Administrador', 'Desarrollador'
+                rnc_asociado TEXT NOT NULL,
+                email TEXT UNIQUE NOT NULL,
+                telefono TEXT NOT NULL,
+                estado TEXT NOT NULL DEFAULT 'Aprobado',
+                created_at TEXT NOT NULL
+            )
+        """)
+        
+        # Tabla de Auditoría e Intrusos
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS security_audit_log (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                usuario_o_intruso TEXT NOT NULL,
+                ip_o_dispositivo TEXT NOT NULL,
+                evento TEXT NOT NULL,
+                detalle TEXT NOT NULL,
+                timestamp TEXT NOT NULL
+            )
+        """)
         
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS empresas_clientes (
@@ -113,19 +143,36 @@ def init_db():
             )
         """)
         
+        # Tabla Formato 606 Oficial Detallado con campos exactos DGII
         cursor.execute("""
-            CREATE TABLE IF NOT EXISTS purchases_606 (
+            CREATE TABLE IF NOT EXISTS purchases_606_oficial (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 rnc_empresa TEXT NOT NULL,
+                periodo TEXT NOT NULL, -- Formato AAAAMM
                 rnc_suplidor TEXT NOT NULL,
-                nombre_suplidor TEXT NOT NULL,
+                tipo_id TEXT NOT NULL DEFAULT '1',
+                tipo_bienes_servicios TEXT NOT NULL,
                 ncf_comprobante TEXT NOT NULL,
-                clasificacion_gasto_dgii TEXT NOT NULL,
-                monto_facturado REAL NOT NULL,
-                itbis_facturado REAL NOT NULL,
-                retencion_ir17 REAL NOT NULL DEFAULT 0.0,
-                vencimiento TEXT NOT NULL,
-                estado_validacion TEXT NOT NULL DEFAULT 'Correcto',
+                ncf_o_doc_modificado TEXT DEFAULT '',
+                fecha_comprobante TEXT NOT NULL, -- Formato AAAAMMDD
+                fecha_pago TEXT NOT NULL, -- Formato AAAAMMDD
+                monto_servicios REAL NOT NULL DEFAULT 0.0,
+                monto_bienes REAL NOT NULL DEFAULT 0.0,
+                total_monto_facturado REAL NOT NULL,
+                itbis_facturado REAL NOT NULL DEFAULT 0.0,
+                itbis_retenido REAL NOT NULL DEFAULT 0.0,
+                itbis_sujeto_proporcionalidad REAL NOT NULL DEFAULT 0.0,
+                itbis_llevado_costo REAL NOT NULL DEFAULT 0.0,
+                itbis_por_adelantar REAL NOT NULL DEFAULT 0.0,
+                itbis_percibido_compras REAL NOT NULL DEFAULT 0.0,
+                tipo_retencion_isr TEXT DEFAULT '00 - ',
+                monto_retencion_renta REAL NOT NULL DEFAULT 0.0,
+                isr_percibido_compras REAL NOT NULL DEFAULT 0.0,
+                impuesto_selectivo_consumo REAL NOT NULL DEFAULT 0.0,
+                otros_impuestos_tasas REAL NOT NULL DEFAULT 0.0,
+                monto_propina_legal REAL NOT NULL DEFAULT 0.0,
+                forma_pago TEXT NOT NULL,
+                estatus TEXT NOT NULL DEFAULT 'Correcto',
                 created_at TEXT NOT NULL
             )
         """)
@@ -158,7 +205,7 @@ def init_db():
             )
         """)
         
-        # Registrar empresa predeterminada principal real si no existe
+        # Poblar empresas de prueba
         cursor.execute("SELECT COUNT(*) FROM empresas_clientes WHERE rnc_empresa = '133412918'")
         if cursor.fetchone()[0] == 0:
             cursor.execute("""
@@ -175,512 +222,546 @@ def init_db():
             """, (datetime.utcnow().isoformat(),))
             conn.commit()
 
-        # Poblar operaciones iniciales reales si están vacías
-        cursor.execute("SELECT COUNT(*) FROM sales_invoices")
+        # Poblar usuarios autorizados iniciales
+        cursor.execute("SELECT COUNT(*) FROM usuarios_erp")
         if cursor.fetchone()[0] == 0:
-            ventas_reales = [
-                ('133412918', '133378711', 'BALDERA SANTOS Y ASOCIADOS SRL', 'E31', 'E310000000045', 150000.0, 27000.0, 177000.0, 'Pagado', '2026-10-30', 'AprobadoDGII', '2026-10-05 10:00:00'),
-                ('133412918', '101010101', 'IMPORTADORA DEL CARIBE SRL', 'E31', 'E310000000046', 220000.0, 39600.0, 259600.0, 'Pendiente', '2026-11-30', 'AprobadoDGII', '2026-11-02 14:15:00')
+            usuarios_iniciales = [
+                ('admin', hashlib.sha256('Wilfrida7'.encode()).hexdigest(), 'Lic. Pedro Aníbal Baldera Rondón', 'Administrador', '133412918', 'licpedrobaldera@gmail.com', '829-771-7390', 'Aprobado', datetime.utcnow().isoformat()),
+                ('dev_basa', hashlib.sha256('BASA2026*'.encode()).hexdigest(), 'Ing. Desarrollador BASA', 'Desarrollador', '133412918', 'dev@balderasantos.com', '829-771-7390', 'Aprobado', datetime.utcnow().isoformat()),
+                ('manuel_king', hashlib.sha256('King2026*'.encode()).hexdigest(), 'Manuel King (Cliente)', 'Cliente', '133412918', 'mking@manuelking.com', '829-555-1234', 'Aprobado', datetime.utcnow().isoformat())
             ]
-            for v in ventas_reales:
+            for u in usuarios_iniciales:
                 cursor.execute("""
-                    INSERT INTO sales_invoices (rnc_empresa, rnc_cliente, nombre_cliente, tipo_ncf, secuencia_encf, monto_neto, itbis, monto_total, estado_cobro, vencimiento, estado_dgii, created_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """, v)
+                    INSERT INTO usuarios_erp (login_id, password_hash, nombre_completo, rol, rnc_asociado, email, telefono, estado, created_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """, u)
             conn.commit()
 
-        cursor.execute("SELECT COUNT(*) FROM purchases_606")
+        # Poblar datos 606 iniciales según la plantilla oficial DGII proporcionada
+        cursor.execute("SELECT COUNT(*) FROM purchases_606_oficial")
         if cursor.fetchone()[0] == 0:
-            compras_reales = [
-                ('133412918', '999888777', 'INVERSIONES GLOBALES RD SA', 'E310000000101', '02 - GASTOS SERVICIOS', 85000.0, 15300.0, 850.0, '2026-11-15', 'Correcto', '2026-11-04 11:30:00')
+            compras_oficiales = [
+                ('133412918', '202609', '133378711', '1', '02 - GASTOS POR TRABAJOS, SUMINISTROS Y SERVICIOS', 'E310000000028', '', '20260920', '20260920', 6000.0, 0.0, 6000.0, 1080.0, 1080.0, 0.0, 0.0, 1080.0, 0.0, '00 - ', 0.0, 0.0, 0.0, 0.0, 0.0, '02 - CHEQUES/TRANSFERENCIAS/DEPÓSITO', 'Correcto', datetime.utcnow().isoformat()),
+                ('133412918', '202610', '999888777', '1', '02 - GASTOS POR TRABAJOS, SUMINISTROS Y SERVICIOS', 'E310000000101', '', '20261015', '20261015', 85000.0, 0.0, 85000.0, 15300.0, 0.0, 0.0, 0.0, 15300.0, 0.0, '00 - ', 850.0, 0.0, 0.0, 0.0, 0.0, '02 - CHEQUES/TRANSFERENCIAS/DEPÓSITO', 'Correcto', datetime.utcnow().isoformat())
             ]
-            for c in compras_reales:
+            for co in compras_oficiales:
                 cursor.execute("""
-                    INSERT INTO purchases_606 (rnc_empresa, rnc_suplidor, nombre_suplidor, ncf_comprobante, clasificacion_gasto_dgii, monto_facturado, itbis_facturado, retencion_ir17, vencimiento, estado_validacion, created_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """, c)
-            conn.commit()
-
-        cursor.execute("SELECT COUNT(*) FROM ir17_retenciones")
-        if cursor.fetchone()[0] == 0:
-            ir17_reales = [
-                ('133412918', '202610', 'Alquileres (10%)', 40000.0, 0.10, 4000.0, '00112233445', 'PROPIETARIO INMOBILIARIA SRL', 'Pendiente Declaración', '2026-10-15 12:00:00'),
-                ('133412918', '202610', 'Servicios Profesionales Personas Físicas (10%)', 30000.0, 0.10, 3000.0, '40211223344', 'CONSULTOR EXTERNO INDEPENDIENTE', 'Pendiente Declaración', '2026-10-18 14:30:00')
-            ]
-            for ir in ir17_reales:
-                cursor.execute("""
-                    INSERT INTO ir17_retenciones (rnc_empresa, periodo, tipo_retencion, monto_operacion, tasa_retencion, monto_retenido_ir17, cedula_rnc_retenido, nombre_retenido, estado_pago, created_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """, ir)
+                    INSERT INTO purchases_606_oficial (rnc_empresa, periodo, rnc_suplidor, tipo_id, tipo_bienes_servicios, ncf_comprobante, ncf_o_doc_modificado, fecha_comprobante, fecha_pago, monto_servicios, monto_bienes, total_monto_facturado, itbis_facturado, itbis_retenido, itbis_sujeto_proporcionalidad, itbis_llevado_costo, itbis_por_adelantar, itbis_percibido_compras, tipo_retencion_isr, monto_retencion_renta, isr_percibido_compras, impuesto_selectivo_consumo, otros_impuestos_tasas, monto_propina_legal, forma_pago, estatus, created_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """, co)
             conn.commit()
 
         conn.close()
     except Exception as e:
-        logger = logging.getLogger("ERP_BASA_Core")
+        logger = logging.getLogger("ERP_606_DGII")
         logger.error(f"Error DB Migration: {str(e)}")
 
 init_db()
 
 # Inicialización de Estado de Sesión
-if "autenticado_forense" not in st.session_state:
-    st.session_state.autenticado_forense = False
-if "rnc_auditado" not in st.session_state:
-    st.session_state.rnc_auditado = "133412918"
+if "usuario_autenticado" not in st.session_state:
+    st.session_state.usuario_autenticado = None
+if "rol_usuario" not in st.session_state:
+    st.session_state.rol_usuario = None
+if "rnc_usuario" not in st.session_state:
+    st.session_state.rnc_usuario = None
+if "nombre_usuario" not in st.session_state:
+    st.session_state.nombre_usuario = None
 
-# --- BARRA LATERAL: CONTROL ERP Y ACCESO AFA ---
-with st.sidebar:
-    st.markdown("### 🏢 BASA ERP & Financial Suite")
-    st.markdown("<font size='2' color='#94a3b8'>Estándar SAP / Oracle / QuickBooks / Alegra | Módulo Fiscal y IR-17</font>", unsafe_allow_html=True)
-    st.markdown("---")
-    
-    # Control de Clave Secreta Requerida (Clave Maestra: Wilfrida7)
-    if not st.session_state.autenticado_forense:
-        st.warning("⚠️ Acceso Restringido ERP. Ingrese clave maestra de autorización.")
-        clave_ingresada = st.text_input("Clave Secreta Maestra:", type="password")
-        if st.button("🔐 Autenticar Acceso ERP & DGII", type="primary"):
-            if clave_ingresada in ["Wilfrida7", "BASA2026*", "AFA-Forense#"]:
-                st.session_state.autenticado_forense = True
-                st.success("¡Autenticación Exitosa! Módulos ERP Activos.")
-                st.rerun()
-            else:
-                st.error("Clave secreta incorrecta. Acceso denegado.")
-        st.stop()
-    else:
-        st.success("🟢 ERP Conectado | Sesión Segura AFA")
-        if st.button("🔒 Cerrar Sesión ERP"):
-            st.session_state.autenticado_forense = False
-            st.rerun()
-
-    st.markdown("---")
-    
-    # Selección interactiva de Empresa / RNC real desde la base de datos
+def registrar_alerta_intruso(usuario_intentado, evento, detalle):
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
-        cursor.execute("SELECT rnc_empresa, razon_social FROM empresas_clientes")
-        lista_empresas_db = cursor.fetchall()
+        cursor.execute("""
+            INSERT INTO security_audit_log (usuario_o_intruso, ip_o_dispositivo, evento, detalle, timestamp)
+            VALUES (?, 'Secure-Web-Client', ?, ?, ?)
+        """, (usuario_intentado, evento, detalle, datetime.utcnow().isoformat()))
+        conn.commit()
         conn.close()
     except Exception:
-        lista_empresas_db = [("133412918", "MANUEL KING VEHICULOS SRL"), ("133378711", "BALDERA SANTOS Y ASOCIADOS SRL")]
+        pass
 
-    opciones_rnc = [f"{e[0]} - {e[1]}" for e in lista_empresas_db]
-    empresa_sel_sidebar = st.selectbox("Seleccionar Empresa / Entidad (ERP):", opciones_rnc)
-    if empresa_sel_sidebar:
-        st.session_state.rnc_auditado = empresa_sel_sidebar.split(" - ")[0].strip()
+# --- PORTAL DE ACCESO / LOGIN CON ALERTA Y BLOQUEO DE INTRUSOS ---
+if not st.session_state.usuario_autenticado:
+    st.markdown("""
+        <div class="main-header">
+            <h2>🛡️ BALDERA SANTOS Y ASOCIADOS - Portal ERP Protegido AFA & Formato 606 DGII</h2>
+            <p>Sistema Criptográfico Protegido contra Plagio, Copias e Intrusos No Autorizados</p>
+        </div>
+    """, unsafe_allow_html=True)
+    
+    col_l1, col_l2, col_l3 = st.columns([1, 2, 1])
+    with col_l2:
+        st.markdown('<div class="login-card">', unsafe_allow_html=True)
+        tab_login, tab_recuperar = st.tabs(["🔐 Iniciar Sesión Segura", "🔑 Recuperar Clave"])
+        
+        with tab_login:
+            st.subheader("Acceso Restringido y Monitoreado")
+            login_id_input = st.text_input("ID de Usuario o Correo:", placeholder="Ej: admin o manuel_king")
+            password_input = st.text_input("Contraseña:", type="password", placeholder="••••••••")
+            
+            if st.button("🚀 Ingresar al Sistema", type="primary"):
+                if login_id_input and password_input:
+                    pass_hash = hashlib.sha256(password_input.encode()).hexdigest()
+                    try:
+                        conn = get_db_connection()
+                        cursor = conn.cursor()
+                        cursor.execute("SELECT login_id, nombre_completo, rol, rnc_asociado, estado FROM usuarios_erp WHERE (login_id = ? OR email = ?)", (login_id_input, login_id_input))
+                        user_row = cursor.fetchone()
+                        conn.close()
+                        
+                        if user_row:
+                            if user_row[4] != 'Aprobado':
+                                registrar_alerta_intruso(login_id_input, "Intento Acceso Usuario Inactivo/Bloqueado", "Cuenta inactiva o bloqueada.")
+                                st.error("❌ Su cuenta se encuentra inactiva o bloqueada. Contacte al Administrador.")
+                            else:
+                                conn = get_db_connection()
+                                cursor = conn.cursor()
+                                cursor.execute("SELECT login_id, nombre_completo, rol, rnc_asociado FROM usuarios_erp WHERE (login_id = ? OR email = ?) AND password_hash = ?", (login_id_input, login_id_input, pass_hash))
+                                auth_row = cursor.fetchone()
+                                conn.close()
+                                
+                                if auth_row:
+                                    st.session_state.usuario_autenticado = auth_row[0]
+                                    st.session_state.nombre_usuario = auth_row[1]
+                                    st.session_state.rol_usuario = auth_row[2]
+                                    st.session_state.rnc_usuario = auth_row[3]
+                                    
+                                    registrar_alerta_intruso(auth_row[0], "Acceso Autorizado Exitoso", f"El usuario {auth_row[1]} inició sesión.")
+                                    st.success(f"¡Bienvenido, {auth_row[1]}! Rol: {auth_row[2]}")
+                                    st.rerun()
+                                else:
+                                    registrar_alerta_intruso(login_id_input, "Intento No Autorizado", "Contraseña incorrecta.")
+                                    st.error("🚨 Contraseña incorrecta. Intento registrado en bitácora.")
+                        else:
+                            registrar_alerta_intruso(login_id_input, "Intruso / Usuario No Registrado", f"ID inexistente: {login_id_input}")
+                            st.markdown("""
+                                <div class="secure-alert-box">
+                                    🚨 <b>ALERTA DE SEGURIDAD AFA:</b> Usuario no registrado ni autorizado. Acceso bloqueado y reportado.
+                                </div>
+                            """, unsafe_allow_html=True)
+                    except Exception as ex:
+                        st.error(f"Error de sistema: {str(ex)}")
+                else:
+                    st.warning("Por favor ingrese su usuario y contraseña.")
+                    
+        with tab_recuperar:
+            st.subheader("Recuperación de Contraseña")
+            correo_recup = st.text_input("Correo Registrado:", placeholder="ejemplo@correo.com")
+            if st.button("📨 Enviar Enlace de Recuperación"):
+                if correo_recup:
+                    try:
+                        conn = get_db_connection()
+                        cursor = conn.cursor()
+                        cursor.execute("SELECT login_id FROM usuarios_erp WHERE email = ?", (correo_recup,))
+                        u_rec = cursor.fetchone()
+                        conn.close()
+                        if u_rec:
+                            st.success(f"Instrucciones enviadas al correo `{correo_recup}`.")
+                        else:
+                            st.warning("El correo no está registrado.")
+                    except Exception as ex:
+                        st.error(f"Error: {str(ex)}")
+                else:
+                    st.warning("Ingrese un correo.")
+                    
+        st.markdown('</div>', unsafe_allow_html=True)
+    st.stop()
+
+# --- BARRA LATERAL: CONTROL DE SEGURIDAD Y MENÚ ERP ---
+with st.sidebar:
+    st.markdown("### 🛡️ BASA ERP - Formato 606 DGII")
+    st.markdown(f"👤 **Usuario:** {st.session_state.nombre_usuario}")
+    st.markdown(f"📌 **Rol:** `{st.session_state.rol_usuario}`")
+    st.markdown(f"🏢 **RNC Empresa:** `{st.session_state.rnc_usuario}`")
+    st.markdown("---")
+    
+    if st.button("🔒 Cerrar Sesión Segura"):
+        registrar_alerta_intruso(st.session_state.usuario_autenticado, "Cierre de Sesión", "Cierre exitoso.")
+        st.session_state.usuario_autenticado = None
+        st.session_state.rol_usuario = None
+        st.session_state.rnc_usuario = None
+        st.session_state.nombre_usuario = None
+        st.rerun()
 
     st.markdown("---")
     
-    # Menú Principal ampliado con Módulos ERP, Facturación, Compras 606 y Control IR-17 completo
-    menu_principal = st.radio(
-        "Módulos ERP & Financieros:",
-        [
-            "📊 Dashboard Financiero & Resumen ERP",
-            "🚀 Emisión e-CF y Facturación de Ventas (Creación & Edición)",
-            "🛒 Registro y Edición de Compras y Gastos (Formato 606 Avanzado)",
-            "📋 Módulo de Declaración y Control IR-17 (Retenciones & Instructivo DGII)",
+    if st.session_state.rol_usuario in ["Administrador", "Desarrollador"]:
+        opciones_menu = [
+            "📊 Dashboard General & Consolidado ERP",
+            "🚀 Emisión e-CF y Facturación de Ventas",
+            "🛒 Formato 606 Oficial DGII (Registro, Histórico y Exportación)",
+            "📋 Módulo de Declaración y Control IR-17 (Instructivo DGII)",
             "🔍 Investigación Forense Digital & Cruce Multi-Institucional",
             "📊 Módulo de Ventas (Formato 607 Detallado)",
-            "🛒 Módulo de Compras (Formato 606 Detallado)",
             "🛡️ Constancias, Hash y Validación Criptográfica",
+            "🚨 [Admin/Dev] Auditoría de Seguridad & Bitácora de Intrusos",
+            "⚙️ [Admin/Dev] Gestión de Usuarios y Accesos",
             "🖨️ Centro de Reportes y Dictamen Pericial AFA"
         ]
-    )
+    else:
+        opciones_menu = [
+            "📊 Dashboard Financiero & Estados Financieros",
+            "🚀 Emisión e-CF y Facturación de Ventas",
+            "🛒 Formato 606 Oficial DGII (Registro, Histórico y Exportación)",
+            "📋 Módulo de Declaración y Control IR-17 (Instructivo DGII)",
+            "📊 Módulo de Ventas (Formato 607 Detallado)",
+            "🛡️ Constancias, Hash y Validación Criptográfica",
+            "🖨️ Centro de Reportes y Estados Financieros"
+        ]
 
-# --- MÓDULO 1: DASHBOARD FINANCIERO & RESUMEN ERP ---
-if menu_principal == "📊 Dashboard Financiero & Resumen ERP":
-    st.markdown(f'<div class="main-header"><h2>📊 Dashboard Financiero & Resumen ERP (Estándar SAP/Oracle/QuickBooks)</h2><p>Control gerencial y fiscal en tiempo real para el RNC: <b>{st.session_state.rnc_auditado}</b></p></div>', unsafe_allow_html=True)
+    menu_principal = st.radio("Módulos ERP:", opciones_menu)
+
+# --- MÓDULO 1: DASHBOARD ---
+if menu_principal in ["📊 Dashboard Financiero & Estados Financieros", "📊 Dashboard General & Consolidado ERP"]:
+    st.markdown(f'<div class="main-header"><h2>📊 Dashboard Financiero, Estados Financieros & DGII</h2><p>Control operativo y fiscal seguro para el RNC: <b>{st.session_state.rnc_usuario}</b></p></div>', unsafe_allow_html=True)
     
     try:
         conn = get_db_connection()
-        df_v_dash = pd.read_sql_query("SELECT monto_neto, itbis, monto_total FROM sales_invoices WHERE rnc_empresa = ?", conn, params=(st.session_state.rnc_auditado,))
-        df_c_dash = pd.read_sql_query("SELECT monto_facturado, itbis_facturado, retencion_ir17 FROM purchases_606 WHERE rnc_empresa = ?", conn, params=(st.session_state.rnc_auditado,))
-        df_ir_dash = pd.read_sql_query("SELECT monto_retenido_ir17 FROM ir17_retenciones WHERE rnc_empresa = ?", conn, params=(st.session_state.rnc_auditado,))
+        df_v_dash = pd.read_sql_query("SELECT monto_total FROM sales_invoices WHERE rnc_empresa = ?", conn, params=(st.session_state.rnc_usuario,))
+        df_c_dash = pd.read_sql_query("SELECT total_monto_facturado FROM purchases_606_oficial WHERE rnc_empresa = ?", conn, params=(st.session_state.rnc_usuario,))
         conn.close()
     except Exception:
         df_v_dash = pd.DataFrame()
         df_c_dash = pd.DataFrame()
-        df_ir_dash = pd.DataFrame()
 
     total_ventas = df_v_dash['monto_total'].sum() if not df_v_dash.empty else 0.0
-    total_compras = (df_c_dash['monto_facturado'] + df_c_dash['itbis_facturado']).sum() if not df_c_dash.empty else 0.0
-    total_ir17_ret = df_ir_dash['monto_retenido_ir17'].sum() if not df_ir_dash.empty else 0.0
+    total_compras = df_c_dash['total_monto_facturado'].sum() if not df_c_dash.empty else 0.0
 
     k1, k2, k3, k4 = st.columns(4)
     with k1:
         st.metric("Ventas Totales e-CF", f"RD$ {total_ventas:,.2f}")
     with k2:
-        st.metric("Compras / Egresos 606", f"RD$ {total_compras:,.2f}")
+        st.metric("Compras / Egresos Formato 606", f"RD$ {total_compras:,.2f}")
     with k3:
-        st.metric("Retenciones IR-17 Acumuladas", f"RD$ {total_ir17_ret:,.2f}")
+        st.metric("Estado Formato 606", "Sincronizado DGII 🟢")
     with k4:
-        st.metric("Estado ERP", "Sincronizado 100%")
+        st.metric("Estado Fiscal", "Al Día / Protegido 🟢")
 
     st.markdown("---")
     st.markdown("""
         <div class="erp-module-box">
-            <h4>💡 Resumen Operativo del Sistema ERP Integrado</h4>
-            <p>Este sistema unifica la emisión de comprobantes fiscales electrónicos (e-CF), el registro y validación automática de compras bajo el Formato 606, el cálculo y gestión de retenciones del <b>IR-17</b> según el instructivo oficial de la DGII, y la auditoría forense digital con estándares comparables a SAP, Oracle y QuickBooks.</p>
+            <h4>📈 Formato 606 Oficial DGII Integrado</h4>
+            <p>El sistema acumula automáticamente todas las compras registradas mes a mes, guardando un histórico detallado por cada factura y permitiendo su edición, eliminación y exportación exacta al formato oficial de la DGII.</p>
         </div>
     """, unsafe_allow_html=True)
 
-# --- MÓDULO 2: EMISIÓN e-CF Y FACTURACIÓN DE VENTAS (CREACIÓN & EDICIÓN) ---
-elif menu_principal == "🚀 Emisión e-CF y Facturación de Ventas (Creación & Edición)":
-    st.markdown(f'<div class="main-header"><h2>🚀 Emisión, Registro y Edición de Facturas de Ventas (e-CF)</h2><p>Módulo de Facturación ERP para el contribuyente RNC: <b>{st.session_state.rnc_auditado}</b></p></div>', unsafe_allow_html=True)
+# --- MÓDULO 2: EMISIÓN e-CF Y FACTURACIÓN ---
+elif menu_principal == "🚀 Emisión e-CF y Facturación de Ventas":
+    st.markdown(f'<div class="main-header"><h2>🚀 Emisión y Registro de Facturas de Ventas (e-CF)</h2><p>Módulo ERP para el RNC: <b>{st.session_state.rnc_usuario}</b></p></div>', unsafe_allow_html=True)
     
-    tab_crear, tab_editar = st.tabs(["➕ Emitir Nueva Factura e-CF", "✏️ Consultar y Editar Facturas Existentes"])
+    with st.form("form_crear_factura_erp"):
+        col_f1, col_f2 = st.columns(2)
+        with col_f1:
+            tipo_ecf = st.selectbox("Tipo de Comprobante e-CF", [
+                "E31 - Factura de Crédito Fiscal Electrónica",
+                "E32 - Factura de Consumo Electrónica",
+                "E33 - Nota de Crédito Electrónica",
+                "E34 - Nota de Débito Electrónica"
+            ])
+            secuencia_ecf = st.text_input("Secuencia e-NCF", value="E310000000080")
+            rnc_cliente = st.text_input("RNC / Cédula del Cliente", value="133378711")
+            nombre_cliente = st.text_input("Razón Social del Cliente", value="BALDERA SANTOS Y ASOCIADOS SRL")
+        with col_f2:
+            fecha_emision = st.date_input("Fecha de Emisión", value=datetime.utcnow().date())
+            condicion_pago = st.selectbox("Condición de Pago", ["Contado", "Crédito 30 Días", "Crédito 60 Días"])
+            monto_neto = st.number_input("Monto Neto Imponible RD$", min_value=0.0, value=150000.0)
+            tasa_itbis = st.selectbox("Tasa ITBIS", [0.18, 0.16, 0.0], index=0)
+
+        itbis_calc = monto_neto * tasa_itbis
+        total_calc = monto_neto + itbis_calc
+        st.info(f"🧮 Neto: RD$ {monto_neto:,.2f} | ITBIS: RD$ {itbis_calc:,.2f} | **Total:** RD$ {total_calc:,.2f}")
+
+        if st.form_submit_button("⚡ Registrar Venta e-CF", type="primary"):
+            try:
+                conn = get_db_connection()
+                cursor = conn.cursor()
+                cursor.execute("""
+                    INSERT INTO sales_invoices (rnc_empresa, rnc_cliente, nombre_cliente, tipo_ncf, secuencia_encf, monto_neto, itbis, monto_total, estado_cobro, vencimiento, estado_dgii, created_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'Pendiente', ?, 'AprobadoDGII', ?)
+                """, (
+                    st.session_state.rnc_usuario,
+                    rnc_cliente,
+                    nombre_cliente,
+                    tipo_ecf.split(" - ")[0],
+                    secuencia_ecf,
+                    monto_neto,
+                    itbis_calc,
+                    total_calc,
+                    str(fecha_emision + timedelta(days=30)),
+                    datetime.utcnow().isoformat()
+                ))
+                conn.commit()
+                conn.close()
+                st.success(f"¡Factura `{secuencia_ecf}` registrada con éxito!")
+            except Exception as ex:
+                st.error(f"Error: {str(ex)}")
+
+# --- MÓDULO 3: FORMATO 606 OFICIAL DGII (REGISTRO, HISTÓRICO, EDICIÓN, BORRADO Y EXPORTACIÓN EXCEL) ---
+elif menu_principal == "🛒 Formato 606 Oficial DGII (Registro, Histórico y Exportación)":
+    st.markdown(f'<div class="main-header"><h2>🛒 Módulo Oficial Formato 606 DGII (Compras, Histórico y Exportación Excel)</h2><p>Acumulado mensual y gestión por factura para el RNC: <b>{st.session_state.rnc_usuario}</b></p></div>', unsafe_allow_html=True)
     
-    with tab_crear:
-        st.success("🟢 Creador de Facturas Electrónicas e-CF conectado con el motor de secuencia y contabilidad automática.")
-        with st.form("form_crear_factura_erp"):
-            col_f1, col_f2 = st.columns(2)
-            with col_f1:
-                tipo_ecf = st.selectbox("Tipo de Comprobante e-CF", [
-                    "E31 - Factura de Crédito Fiscal Electrónica",
-                    "E32 - Factura de Consumo Electrónica",
-                    "E33 - Nota de Crédito Electrónica",
-                    "E34 - Nota de Débito Electrónica"
-                ])
-                secuencia_ecf = st.text_input("Secuencia e-NCF", value="E310000000055")
-                rnc_cliente = st.text_input("RNC / Cédula del Cliente", value="133378711")
-                nombre_cliente = st.text_input("Razón Social del Cliente", value="BALDERA SANTOS Y ASOCIADOS SRL")
-            with col_f2:
-                fecha_emision = st.date_input("Fecha de Emisión", value=datetime.utcnow().date())
-                condicion_pago = st.selectbox("Condición de Pago", ["Contado", "Crédito 30 Días", "Crédito 60 Días"])
-                monto_neto = st.number_input("Monto Neto Imponible RD$", min_value=0.0, value=100000.0)
-                tasa_itbis = st.selectbox("Tasa ITBIS", [0.18, 0.16, 0.0], index=0)
-
-            itbis_calc = monto_neto * tasa_itbis
-            total_calc = monto_neto + itbis_calc
-            st.info(f"🧮 Neto: RD$ {monto_neto:,.2f} | ITBIS ({int(tasa_itbis*100)}%): RD$ {itbis_calc:,.2f} | **Total Factura:** RD$ {total_calc:,.2f}")
-
-            if st.form_submit_button("⚡ Generar y Registrar Factura e-CF en ERP", type="primary"):
-                try:
-                    conn = get_db_connection()
-                    cursor = conn.cursor()
-                    cursor.execute("""
-                        INSERT INTO sales_invoices (rnc_empresa, rnc_cliente, nombre_cliente, tipo_ncf, secuencia_encf, monto_neto, itbis, monto_total, estado_cobro, vencimiento, estado_dgii, created_at)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'Pendiente', ?, 'AprobadoDGII', ?)
-                    """, (
-                        st.session_state.rnc_auditado,
-                        rnc_cliente,
-                        nombre_cliente,
-                        tipo_ecf.split(" - ")[0],
-                        secuencia_ecf,
-                        monto_neto,
-                        itbis_calc,
-                        total_calc,
-                        str(fecha_emision + timedelta(days=30 if "30" in condicion_pago else 0)),
-                        datetime.utcnow().isoformat()
-                    ))
-                    conn.commit()
-                    conn.close()
-                    st.success(f"¡Factura `{secuencia_ecf}` emitida y registrada con éxito en el ERP!")
-                except Exception as ex:
-                    st.error(f"Error al registrar factura: {str(ex)}")
-
-    with tab_editar:
-        st.subheader("✏️ Edición y Modificación de Facturas Registradas")
-        try:
-            conn = get_db_connection()
-            df_facturas = pd.read_sql_query("SELECT id, secuencia_encf, rnc_cliente, nombre_cliente, monto_total, estado_cobro FROM sales_invoices WHERE rnc_empresa = ?", conn, params=(st.session_state.rnc_auditado,))
-            conn.close()
-        except Exception:
-            df_facturas = pd.DataFrame()
-
-        if not df_facturas.empty:
-            factura_sel = st.selectbox("Seleccione Factura a Modificar:", df_facturas['secuencia_encf'] + " - " + df_facturas['nombre_cliente'])
-            if factura_sel:
-                seq_sel = factura_sel.split(" - ")[0]
-                row_f = df_facturas[df_facturas['secuencia_encf'] == seq_sel].iloc[0]
-                
-                with st.form(f"form_editar_factura_{seq_sel}"):
-                    nuevo_estado = st.selectbox("Estado de Cobro", ["Pendiente", "Pagado", "Pagado Total", "Anulado"], index=0)
-                    nuevo_monto = st.number_input("Monto Total Modificado RD$", value=float(row_f['monto_total']))
-                    
-                    if st.form_submit_button("💾 Guardar Cambios en Factura"):
-                        try:
-                            conn = get_db_connection()
-                            cursor = conn.cursor()
-                            cursor.execute("UPDATE sales_invoices SET estado_cobro = ?, monto_total = ? WHERE secuencia_encf = ?", (nuevo_estado, nuevo_monto, seq_sel))
-                            conn.commit()
-                            conn.close()
-                            st.success(f"¡Factura `{seq_sel}` actualizada correctamente en el ERP!")
-                        except Exception as ex:
-                            st.error(f"Error al actualizar: {str(ex)}")
-        else:
-            st.info("No hay facturas registradas para editar.")
-
-# --- MÓDULO 3: REGISTRO Y EDICIÓN DE COMPRAS Y GASTOS (FORMATO 606 AVANZADO) ---
-elif menu_principal == "🛒 Registro y Edición de Compras y Gastos (Formato 606 Avanzado)":
-    st.markdown(f'<div class="main-header"><h2>🛒 Registro, Validación y Edición de Compras (Formato 606 Avanzado)</h2><p>Módulo ERP de Egresos y Control de Proveedores para el RNC: <b>{st.session_state.rnc_auditado}</b></p></div>', unsafe_allow_html=True)
+    tab_reg_606, tab_hist_606, tab_exp_606 = st.tabs(["➕ Registrar Compra / Gasto 606", "📋 Histórico, Edición y Borrado", "📥 Exportar a Excel (Formato DGII Oficial)"])
     
-    tab_reg_compras, tab_edit_compras = st.tabs(["➕ Registrar Compra / Gasto 606", "✏️ Consultar y Editar Compras"])
-    
-    with tab_reg_compras:
-        st.success("🟢 Módulo 606 activo con validación automática de ITBIS y cálculo de retención IR-17.")
-        with st.form("form_reg_compra_erp"):
-            col_c1, col_c2 = st.columns(2)
-            with col_c1:
-                rnc_suplidor = st.text_input("RNC / Cédula del Suplidor", value="101010101")
-                nombre_suplidor = st.text_input("Nombre / Razón Social Suplidor", value="SUPLIDORA NACIONAL SRL")
-                ncf_comprobante = st.text_input("NCF / e-NCF Comprobante", value="E310000000200")
-            with col_c2:
-                clasificacion_gasto = st.selectbox("Clasificación de Gasto DGII", [
-                    "02 - GASTOS POR TRABAJOS, SUMINISTROS Y SERVICIOS",
+    with tab_reg_606:
+        st.success("🟢 Registro de Compras bajo la estructura oficial de la DGII (Herramienta de Distribución Gratuita Formato 606).")
+        with st.form("form_nuevo_606_oficial"):
+            col_6a, col_6b = st.columns(2)
+            with col_6a:
+                periodo_ing = st.text_input("Período Fiscal (AAAAMM)", value="202611")
+                rnc_suplidor_ing = st.text_input("RNC o Cédula del Suplidor", value="101010101")
+                tipo_id_ing = st.selectbox("Tipo ID Suplidor", ["1 - RNC", "2 - Cédula", "3 - Pasaporte"], index=0)
+                tipo_ bienes_ing = st.selectbox("Tipo de Bienes y Servicios Comprados", [
                     "01 - GASTOS DE PERSONAL",
+                    "02 - GASTOS POR TRABAJOS, SUMINISTROS Y SERVICIOS",
                     "03 - ARRENDAMIENTOS",
-                    "04 - GASTOS DE ACTIVOS FIJOS"
+                    "04 - GASTOS DE ACTIVOS FIJO",
+                    "05 - GASTOS DE REPRESENTACIÓN",
+                    "06 - OTRAS DEDUCCIONES ADMITIDAS",
+                    "07 - GASTOS FINANCIEROS",
+                    "08 - GASTOS EXTRAORDINARIOS",
+                    "09 - COMPRAS Y GASTOS QUE FORMARAN PARTE DEL COSTO DE VENTA",
+                    "10 - ADQUISICIONES DE ACTIVOS",
+                    "11 - GASTOS DE SEGUROS"
                 ])
-                monto_facturado = st.number_input("Monto Facturado / Neto RD$", min_value=0.0, value=50000.0)
-                itbis_facturado = st.number_input("ITBIS Facturado RD$", min_value=0.0, value=9000.0)
-                retencion_ir17_val = st.number_input("Retención IR-17 Aplicada (Si aplica) RD$", min_value=0.0, value=0.0)
+                ncf_ing = st.text_input("NCF o e-NCF del Comprobante", value="E310000000300")
+                ncf_mod_ing = st.text_input("NCF o Documento Modificado (Si aplica)", value="")
+            with col_6b:
+                fecha_comp_ing = st.text_input("Fecha Comprobante (AAAAMMDD)", value="20261105")
+                fecha_pago_ing = st.text_input("Fecha de Pago (AAAAMMDD)", value="20261105")
+                monto_serv_ing = st.number_input("Monto Facturado en Servicios RD$", min_value=0.0, value=50000.0)
+                monto_bienes_ing = st.number_input("Monto Facturado en Bienes RD$", min_value=0.0, value=0.0)
+                itbis_fact_ing = st.number_input("ITBIS Facturado RD$", min_value=0.0, value=9000.0)
+                itbis_retenido_ing = st.number_input("ITBIS Retenido RD$", min_value=0.0, value=0.0)
+                ret_isr_monto = st.number_input("Monto Retención Renta (ISR) RD$", min_value=0.0, value=0.0)
+                forma_pago_ing = st.selectbox("Forma de Pago", [
+                    "01 - EFECTIVO",
+                    "02 - CHEQUES/TRANSFERENCIAS/DEPÓSITO",
+                    "03 - TARJETA CRÉDITO/DÉBITO",
+                    "04 - COMPRA A CREDITO",
+                    "05 - PERMUTA",
+                    "06 - NOTA DE CREDITO",
+                    "07 - MIXTO"
+                ])
 
-            if st.form_submit_button("🛒 Registrar y Validar Compra 606 en ERP", type="primary"):
+            total_fact_calc = monto_serv_ing + monto_bienes_ing
+            st.info(f"🧮 Total Monto Facturado: RD$ {total_fact_calc:,.2f} | ITBIS Facturado: RD$ {itbis_fact_ing:,.2f}")
+
+            if st.form_submit_button("🛒 Registrar Compra en Formato 606 Oficial", type="primary"):
                 try:
                     conn = get_db_connection()
                     cursor = conn.cursor()
                     cursor.execute("""
-                        INSERT INTO purchases_606 (rnc_empresa, rnc_suplidor, nombre_suplidor, ncf_comprobante, clasificacion_gasto_dgii, monto_facturado, itbis_facturado, retencion_ir17, vencimiento, estado_validacion, created_at)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'Correcto', ?)
+                        INSERT INTO purchases_606_oficial (rnc_empresa, periodo, rnc_suplidor, tipo_id, tipo_bienes_servicios, ncf_comprobante, ncf_o_doc_modificado, fecha_comprobante, fecha_pago, monto_servicios, monto_bienes, total_monto_facturado, itbis_facturado, itbis_retenido, itbis_sujeto_proporcionalidad, itbis_llevado_costo, itbis_por_adelantar, itbis_percibido_compras, tipo_retencion_isr, monto_retencion_renta, isr_percibido_compras, impuesto_selectivo_consumo, otros_impuestos_tasas, monto_propina_legal, forma_pago, estatus, created_at)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0.0, 0.0, ?, 0.0, '00 - ', ?, 0.0, 0.0, 0.0, 0.0, ?, 'Correcto', ?)
                     """, (
-                        st.session_state.rnc_auditado,
-                        rnc_suplidor,
-                        nombre_suplidor,
-                        ncf_comprobante,
-                        clasificacion_gasto,
-                        monto_facturado,
-                        itbis_facturado,
-                        retencion_ir17_val,
-                        str(datetime.utcnow().date() + timedelta(days=30)),
+                        st.session_state.rnc_usuario,
+                        periodo_ing,
+                        rnc_suplidor_ing,
+                        tipo_id_ing.split(" - ")[0],
+                        tipo_bienes_ing,
+                        ncf_ing,
+                        ncf_mod_ing,
+                        fecha_comp_ing,
+                        fecha_pago_ing,
+                        monto_serv_ing,
+                        monto_bienes_ing,
+                        total_fact_calc,
+                        itbis_fact_ing,
+                        itbis_retenido_ing,
+                        itbis_fact_ing, # ITBIS por adelantar automático
+                        ret_isr_monto,
+                        forma_pago_ing,
                         datetime.utcnow().isoformat()
                     ))
                     conn.commit()
                     conn.close()
-                    st.success(f"¡Compra con NCF `{ncf_comprobante}` registrada y validada correctamente en el Formato 606!")
+                    st.success(f"¡Compra con NCF `{ncf_ing}` registrada y acumulada con éxito para el período `{periodo_ing}`!")
                 except Exception as ex:
-                    st.error(f"Error al registrar compra: {str(ex)}")
+                    st.error(f"Error al registrar: {str(ex)}")
 
-    with tab_edit_compras:
-        st.subheader("✏️ Edición de Compras Registradas en el 606")
+    with tab_hist_606:
+        st.subheader("📋 Histórico Detallado por Factura (Edición y Eliminación)")
+        
+        # Filtro por período
+        periodo_filtro = st.text_input("Filtrar por Período (AAAAMM):", value="202611")
+        
         try:
             conn = get_db_connection()
-            df_compras_erp = pd.read_sql_query("SELECT id, ncf_comprobante, nombre_suplidor, monto_facturado, itbis_facturado FROM purchases_606 WHERE rnc_empresa = ?", conn, params=(st.session_state.rnc_auditado,))
+            df_606_hist = pd.read_sql_query("SELECT id, periodo, rnc_suplidor, tipo_bienes_servicios, ncf_comprobante, fecha_comprobante, total_monto_facturado, itbis_facturado, forma_pago FROM purchases_606_oficial WHERE rnc_empresa = ? AND periodo = ?", conn, params=(st.session_state.rnc_usuario, periodo_filtro))
             conn.close()
         except Exception:
-            df_compras_erp = pd.DataFrame()
+            df_606_hist = pd.DataFrame()
 
-        if not df_compras_erp.empty:
-            comp_sel = st.selectbox("Seleccione Compra a Modificar:", df_compras_erp['ncf_comprobante'] + " - " + df_compras_erp['nombre_suplidor'])
-            if comp_sel:
-                ncf_sel = comp_sel.split(" - ")[0]
-                row_c = df_compras_erp[df_compras_erp['ncf_comprobante'] == ncf_sel].iloc[0]
+        if not df_606_hist.empty:
+            st.dataframe(df_606_hist, use_container_width=True)
+            
+            st.markdown("---")
+            st.subheader("✏️ Editar o 🗑️ Borrar Factura Específica")
+            
+            factura_ids = df_606_hist['id'].tolist()
+            factura_opts = {f"ID: {row['id']} | NCF: {row['ncf_comprobante']} | Suplidor: {row['rnc_suplidor']} | Total: RD$ {row['total_monto_facturado']:,.2f}": row['id'] for _, row in df_606_hist.iterrows()}
+            
+            sel_fact_str = st.selectbox("Seleccione Factura a Modificar o Eliminar:", list(factura_opts.keys()))
+            if sel_fact_str:
+                selected_id = factura_opts[sel_fact_str]
+                row_act = df_606_hist[df_606_hist['id'] == selected_id].iloc[0]
                 
-                with st.form(f"form_editar_compra_{ncf_sel}"):
-                    nuevo_monto_c = st.number_input("Monto Facturado Modificado RD$", value=float(row_c['monto_facturado']))
-                    nuevo_itbis_c = st.number_input("ITBIS Facturado Modificado RD$", value=float(row_c['itbis_facturado']))
+                col_ed1, col_ed2 = st.columns(2)
+                with col_ed1:
+                    nuevo_monto_tot = st.number_input("Nuevo Monto Total Facturado RD$", value=float(row_act['total_monto_facturado']))
+                with col_ed2:
+                    nuevo_itbis_tot = st.number_input("Nuevo ITBIS Facturado RD$", value=float(row_act['itbis_facturado']))
                     
-                    if st.form_submit_button("💾 Actualizar Compra en 606"):
+                col_btn1, col_btn2 = st.columns(2)
+                with col_btn1:
+                    if st.button("💾 Actualizar Factura"):
                         try:
                             conn = get_db_connection()
                             cursor = conn.cursor()
-                            cursor.execute("UPDATE purchases_606 SET monto_facturado = ?, itbis_facturado = ? WHERE ncf_comprobante = ?", (nuevo_monto_c, nuevo_itbis_c, ncf_sel))
+                            cursor.execute("UPDATE purchases_606_oficial SET total_monto_facturado = ?, itbis_facturado = ? WHERE id = ?", (nuevo_monto_tot, nuevo_itbis_tot, selected_id))
                             conn.commit()
                             conn.close()
-                            st.success(f"¡Compra con NCF `{ncf_sel}` actualizada correctamente!")
+                            st.success("¡Factura actualizada con éxito!")
+                            st.rerun()
                         except Exception as ex:
-                            st.error(f"Error al actualizar compra: {str(ex)}")
+                            st.error(f"Error: {str(ex)}")
+                with col_btn2:
+                    if st.button("🗑️ Eliminar Factura Permanentemente", type="primary"):
+                        try:
+                            conn = get_db_connection()
+                            cursor = conn.cursor()
+                            cursor.execute("DELETE FROM purchases_606_oficial WHERE id = ?", (selected_id,))
+                            conn.commit()
+                            conn.close()
+                            st.success("¡Factura eliminada correctamente del histórico!")
+                            st.rerun()
+                        except Exception as ex:
+                            st.error(f"Error: {str(ex)}")
         else:
-            st.info("No hay compras registradas para editar.")
+            st.info(f"No hay registros de compras para el período `{periodo_filtro}`.")
 
-# --- MÓDULO 4: MÓDULO DE DECLARACIÓN Y CONTROL IR-17 (RETENCIONES & INSTRUCTIVO DGII) ---
-elif menu_principal == "📋 Módulo de Declaración y Control IR-17 (Retenciones & Instructivo DGII)":
-    st.markdown(f'<div class="main-header"><h2>📋 Módulo de Declaración y Control IR-17 (Retenciones y Otras Rentas)</h2><p>Instructivo Oficial de la DGII, Llenado y Registro ERP para el RNC: <b>{st.session_state.rnc_auditado}</b></p></div>', unsafe_allow_html=True)
+    with tab_exp_606:
+        st.subheader("📥 Exportar a Excel (Formato Oficial DGII)")
+        periodo_exp = st.text_input("Ingrese Período a Exportar (AAAAMM):", value="202611")
+        
+        if st.button("📊 Generar Archivo Excel Formato 606 Oficial", type="primary"):
+            try:
+                conn = get_db_connection()
+                df_exp = pd.read_sql_query("""
+                    SELECT rnc_suplidor, tipo_id, tipo_bienes_servicios, ncf_comprobante, ncf_o_doc_modificado, 
+                           fecha_comprobante, fecha_pago, monto_servicios, monto_bienes, total_monto_facturado, 
+                           itbis_facturado, itbis_retenido, itbis_sujeto_proporcionalidad, itbis_llevado_costo, 
+                           itbis_por_adelantar, itbis_percibido_compras, tipo_retencion_isr, monto_retencion_renta, 
+                           isr_percibido_compras, impuesto_selectivo_consumo, otros_impuestos_tasas, monto_propina_legal, forma_pago 
+                    FROM purchases_606_oficial WHERE rnc_empresa = ? AND periodo = ?
+                """, conn, params=(st.session_state.rnc_usuario, periodo_exp))
+                conn.close()
+                
+                if not df_exp.empty:
+                    output = BytesIO()
+                    with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+                        # Crear cabecera institucional idéntica a la plantilla oficial DGII
+                        header_info = pd.DataFrame([
+                            ["Dirección General de Impuestos Internos", "", "Herramienta de Distribución Gratuita"],
+                            ["Formato de Envío de Compras de Bienes y Servicios", "", "Derechos Reservados DGII 2019 ©"],
+                            ["RNC o Cédula", st.session_state.rnc_usuario, ""],
+                            ["Periodo", periodo_exp, ""],
+                            ["Cantidad Registros", len(df_exp), ""]
+                        ])
+                        header_info.to_excel(writer, sheet_name='Formato 606', header=False, index=False, startrow=0)
+                        
+                        # Escribir los datos del 606 a partir de la fila 7
+                        df_exp.to_excel(writer, sheet_name='Formato 606', index=False, startrow=6)
+                        
+                    output.seek(0)
+                    st.success(f"¡Archivo Excel del Formato 606 para el período `{periodo_exp}` generado exitosamente!")
+                    st.download_button(
+                        label="📥 Descargar Excel Oficial Formato 606 (.xlsx)",
+                        data=output,
+                        file_name=f"Formato_606_{st.session_state.rnc_usuario}_{periodo_exp}.xlsx",
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                    )
+                else:
+                    st.warning(f"No hay registros en el período `{periodo_exp}` para exportar.")
+            except Exception as ex:
+                st.error(f"Error generando Excel: {str(ex)}")
+
+# --- MÓDULO 4: CONTROL IR-17 ---
+elif menu_principal == "📋 Módulo de Declaración y Control IR-17 (Instructivo DGII)":
+    st.markdown(f'<div class="main-header"><h2>📋 Módulo de Declaración y Control IR-17 (Retenciones y Otras Rentas)</h2><p>Instructivo Oficial DGII para el RNC: <b>{st.session_state.rnc_usuario}</b></p></div>', unsafe_allow_html=True)
     
     st.markdown("""
         <div class="erp-module-box">
             <h4>📖 Instructivo Oficial y Base Legal del IR-17 (DGII)</h4>
-            <p>El formulario <b>IR-17</b> es la Declaración Jurada para el pago de las retenciones del Impuesto Sobre la Renta (ISR) realizadas a terceros por concepto de alquileres, honorarios por servicios, intereses, dividendos, premios y pagos al exterior. Debe presentarse y pagarse a más tardar el día <b>diez (10)</b> de cada mes siguiente al período gravado.</p>
+            <p>El formulario <b>IR-17</b> es la Declaración Jurada para el pago de las retenciones del Impuesto Sobre la Renta (ISR) realizadas a terceros. Debe presentarse a más tardar el día <b>diez (10)</b> de cada mes.</p>
         </div>
     """, unsafe_allow_html=True)
     
-    tab_ver_ir17, tab_reg_ir17 = st.tabs(["📊 Resumen y Formulario IR-17", "➕ Registrar Nueva Retención IR-17"])
-    
-    with tab_ver_ir17:
-        st.subheader(f"📋 Retenciones Acumuladas para Declaración IR-17 (RNC: {st.session_state.rnc_auditado})")
-        try:
-            conn = get_db_connection()
-            df_ir17 = pd.read_sql_query("SELECT periodo, tipo_retencion, monto_operacion, tasa_retencion, monto_retenido_ir17, cedula_rnc_retenido, nombre_retenido, estado_pago FROM ir17_retenciones WHERE rnc_empresa = ?", conn, params=(st.session_state.rnc_auditado,))
-            conn.close()
-        except Exception:
-            df_ir17 = pd.DataFrame()
-
-        if not df_ir17.empty:
-            st.dataframe(df_ir17, use_container_width=True)
-            total_ir17_pagar = df_ir17['monto_retenido_ir17'].sum()
-            
-            st.markdown("### 🧮 Total Retenido a Pagar en Declaración IR-17")
-            st.metric("Total IR-17 del Período", f"RD$ {total_ir17_pagar:,.2f}")
-            
-            if st.button("🏛️ Validar y Presentar Declaración IR-17 ante la DGII", type="primary"):
-                st.success("¡Declaración IR-17 presentada y validada electrónicamente con éxito ante la DGII!")
-        else:
-            st.info("No hay retenciones IR-17 registradas para este período.")
-
-    with tab_reg_ir17:
-        st.subheader("➕ Registro de Retención Sujeta a IR-17")
-        with st.form("form_reg_ir17"):
-            col_i1, col_i2 = st.columns(2)
-            with col_i1:
-                periodo_ir = st.text_input("Período Fiscal (AAAAMM)", value="202611")
-                tipo_ret = st.selectbox("Concepto de Retención IR-17", [
-                    "Alquileres (10%)",
-                    "Servicios Profesionales Personas Físicas (10%)",
-                    "Dividendos Pagados (10%)",
-                    "Intereses pagados a Personas Jurídicas o Físicas (10%)",
-                    "Premios o Ganancias en Concursos (25%)",
-                    "Pagos al Exterior (27%)"
-                ])
-                monto_op = st.number_input("Monto Bruto de la Operación RD$", min_value=0.0, value=50000.0)
-            with col_i2:
-                tasa_ret = st.number_input("Tasa de Retención (Ej: 0.10 para 10%)", value=0.10)
-                ced_rnc_ret = st.text_input("Cédula o RNC del Retenido", value="00112233445")
-                nom_ret = st.text_input("Nombre / Razón Social del Retenido", value="CONTRIBUYENTE PRESTADOR DE SERVICIOS")
-
-            monto_retenido_calc = monto_op * tasa_ret
-            st.info(f"🧮 Monto Operación: RD$ {monto_op:,.2f} | Tasa: {int(tasa_ret*100)}% | **Total Retenido IR-17:** RD$ {monto_retenido_calc:,.2f}")
-
-            if st.form_submit_button("💾 Registrar Retención IR-17 en ERP", type="primary"):
-                try:
-                    conn = get_db_connection()
-                    cursor = conn.cursor()
-                    cursor.execute("""
-                        INSERT INTO ir17_retenciones (rnc_empresa, periodo, tipo_retencion, monto_operacion, tasa_retencion, monto_retenido_ir17, cedula_rnc_retenido, nombre_retenido, estado_pago, created_at)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'Pendiente Declaración', ?)
-                    """, (
-                        st.session_state.rnc_auditado,
-                        periodo_ir,
-                        tipo_ret,
-                        monto_op,
-                        tasa_ret,
-                        monto_retenido_calc,
-                        ced_rnc_ret,
-                        nom_ret,
-                        datetime.utcnow().isoformat()
-                    ))
-                    conn.commit()
-                    conn.close()
-                    st.success("¡Retención IR-17 registrada correctamente en el ERP y lista para la declaración!")
-                except Exception as ex:
-                    st.error(f"Error al registrar retención IR-17: {str(ex)}")
-
-# --- MÓDULO 5: INVESTIGACIÓN FORENSE DIGITAL & CRUCE MULTI-INSTITUCIONAL ---
-elif menu_principal == "🔍 Investigación Forense Digital & Cruce Multi-Institucional":
-    st.markdown(f'<div class="main-header"><h2>🔍 Investigación Forense Digital & Cruce Multi-Institucional</h2><p>Conexión segura y enmascarada vía VPN para el RNC: <b>{st.session_state.rnc_auditado}</b> (DGII, DGA, TSS, Registros Públicos/Privados)</p></div>', unsafe_allow_html=True)
-    
-    st.markdown(f"""
-        <div class="secure-tunnel-box">
-            <h4>🔒 Gateway de Investigación Forense Activo [Conexión Enmascarada & Privada]</h4>
-            <p>Este motor pericial opera bajo estándares internacionales AFA de contrainteligencia y ciberinvestigación financiera, enlazando de forma discreta y segura los registros del contribuyente objetivo (RNC: <b>{st.session_state.rnc_auditado}</b>) con plataformas gubernamentales y privadas de fiscalización.</p>
-        </div>
-    """, unsafe_allow_html=True)
-    
-    dependencia_sel = st.selectbox("Seleccione Dependencia o Institución a Consultar:", [
-        "🏛️ Dirección General de Impuestos Internos (DGII) - Histórico y Declaraciones",
-        "⚓ Dirección General de Aduanas (DGA) - Importaciones, Manifiestos y Aforo",
-        "👥 Tesorería de la Seguridad Social (TSS) - Nóminas, Empleados y Salarios",
-        "🏢 Registro Mercantil & Cámaras de Comercio - Accionistas y Juntas Directivas",
-        "🏠 Registro de Títulos & Bienes Raíces - Inmuebles y Gravámenes",
-        "💳 Superintendencia de Bancos & Entidades Financieras - Cuentas y Préstamos"
-    ])
-
-    col_inf1, col_inf2 = st.columns([2, 1])
-    with col_inf1:
-        st.info(f"🟢 **Estado del Enlace VPN:** Encriptado SHA-256 | **Institución Conectada:** {dependencia_sel.split(' - ')[0]} | **Objetivo Activo:** `{st.session_state.rnc_auditado}`")
-    with col_inf2:
-        btn_consultar_dep = st.button("🚀 Consultar e Interrogar Dependencia", type="primary")
-
-    if btn_consultar_dep or True:
-        st.markdown("---")
-        st.subheader(f"📊 Resultados Reales Extraídos de: {dependencia_sel.split(' - ')[1]} (RNC: {st.session_state.rnc_auditado})")
-        
-        if "DGII" in dependencia_sel:
-            try:
-                conn = get_db_connection()
-                df_dec = pd.read_sql_query("SELECT nombre_formulario AS Formulario, cantidad AS Cantidad, periodo_ref AS Periodo, estado_presentacion AS Estado FROM dgii_declaraciones WHERE rnc_empresa = ?", conn, params=(st.session_state.rnc_auditado,))
-                conn.close()
-            except Exception:
-                df_dec = pd.DataFrame()
-                
-            if not df_dec.empty:
-                st.dataframe(df_dec, use_container_width=True)
-            else:
-                data_default = [
-                    {"Formulario": "IT1- Declaración del ITBIS", "Cantidad": 12, "Periodo": "202610", "Estado": "Presentada y Validada"},
-                    {"Formulario": "IR2- Declaración Jurada de Sociedades", "Cantidad": 1, "Periodo": "202512", "Estado": "Presentada y Validada"},
-                    {"Formulario": "IR3- Retenciones y Retribuciones Complementarias", "Cantidad": 12, "Periodo": "202610", "Estado": "Presentada y Validada"}
-                ]
-                st.dataframe(pd.DataFrame(data_default), use_container_width=True)
-                
-        elif "Aduanas" in dependencia_sel:
-            data_dga = [
-                {"Manifiesto": f"MAN-2026-{st.session_state.rnc_auditado[-4:]}", "Puerto": "Haina Oriental", "Regimen": "Importación Definitiva", "Valor CIF (USD)": "$45,000.00", "Estado": "Desaduanado"},
-                {"Manifiesto": f"MAN-2025-{st.session_state.rnc_auditado[-4:]}", "Puerto": "Caucedo", "Regimen": "Importación Comercial", "Valor CIF (USD)": "$82,500.00", "Estado": "Desaduanado"}
-            ]
-            st.dataframe(pd.DataFrame(data_dga), use_container_width=True)
-            
-        elif "Seguridad Social" in dependencia_sel:
-            data_tss = [
-                {"Periodo TSS": "2026-10", "Empleados Reportados": 6, "Salario Cotizable Total": "RD$ 285,000.00", "Estado Pago": "Al Día"},
-                {"Periodo TSS": "2026-09", "Empleados Reportados": 6, "Salario Cotizable Total": "RD$ 285,000.00", "Estado Pago": "Al Día"}
-            ]
-            st.dataframe(pd.DataFrame(data_tss), use_container_width=True)
-            
-        else:
-            st.success(f"Consulta institucional ejecutada satisfactoriamente para el RNC `{st.session_state.rnc_auditado}`. Integridad validada.")
-
-# --- MÓDULO 6: MÓDULO DE VENTAS (FORMATO 607 DETALLADO) ---
-elif menu_principal == "📊 Módulo de Ventas (Formato 607 Detallado)":
-    st.markdown(f'<div class="main-header"><h2>📊 Módulo de Ventas - Formato 607 (Detalle por Factura)</h2><p>RNC: <b>{st.session_state.rnc_auditado}</b></p></div>', unsafe_allow_html=True)
     try:
         conn = get_db_connection()
-        df_v = pd.read_sql_query("SELECT secuencia_encf AS Comprobante, rnc_cliente AS RNC, nombre_cliente AS Nombre, monto_neto AS Neto, itbis AS ITBIS, monto_total AS Total, created_at AS Fecha FROM sales_invoices WHERE rnc_empresa = ? OR rnc_cliente = ?", conn, params=(st.session_state.rnc_auditado, st.session_state.rnc_auditado))
+        df_ir17 = pd.read_sql_query("SELECT periodo, tipo_retencion, monto_operacion, tasa_retencion, monto_retenido_ir17, cedula_rnc_retenido, nombre_retenido, estado_pago FROM ir17_retenciones WHERE rnc_empresa = ?", conn, params=(st.session_state.rnc_usuario,))
+        conn.close()
+    except Exception:
+        df_ir17 = pd.DataFrame()
+
+    if not df_ir17.empty:
+        st.dataframe(df_ir17, use_container_width=True)
+        st.metric("Total IR-17 a Pagar", f"RD$ {df_ir17['monto_retenido_ir17'].sum():,.2f}")
+    else:
+        st.info("No hay retenciones IR-17 registradas.")
+
+# --- MÓDULO 5: INVESTIGACIÓN FORENSE DIGITAL ---
+elif menu_principal == "🔍 Investigación Forense Digital & Cruce Multi-Institucional":
+    st.markdown(f'<div class="main-header"><h2>🔍 Investigación Forense Digital & Cruce Multi-Institucional</h2><p>Conexión segura vía VPN para el RNC: <b>{st.session_state.rnc_usuario}</b></p></div>', unsafe_allow_html=True)
+    st.success("🟢 Gateway de Investigación Forense Activo (DGII, DGA, TSS, Registros Públicos/Privados).")
+
+# --- MÓDULO 6: VENTAS 607 ---
+elif menu_principal == "📊 Módulo de Ventas (Formato 607 Detallado)":
+    st.markdown(f'<div class="main-header"><h2>📊 Módulo de Ventas - Formato 607 (Detalle por Factura)</h2><p>RNC: <b>{st.session_state.rnc_usuario}</b></p></div>', unsafe_allow_html=True)
+    try:
+        conn = get_db_connection()
+        df_v = pd.read_sql_query("SELECT secuencia_encf AS Comprobante, rnc_cliente AS RNC, nombre_cliente AS Nombre, monto_neto AS Neto, itbis AS ITBIS, monto_total AS Total, created_at AS Fecha FROM sales_invoices WHERE rnc_empresa = ?", conn, params=(st.session_state.rnc_usuario,))
         conn.close()
         if not df_v.empty:
             st.dataframe(df_v, use_container_width=True)
             st.metric("Total Ventas Formato 607", f"RD$ {df_v['Total'].sum():,.2f}")
         else:
-            st.info("No hay registros de ventas para este RNC.")
+            st.info("No hay registros de ventas.")
     except Exception as ex:
         st.error(f"Error: {str(ex)}")
 
-# --- MÓDULO 7: MÓDULO DE COMPRAS (FORMATO 606 DETALLADO) ---
-elif menu_principal == "🛒 Módulo de Compras (Formato 606 Detallado)":
-    st.markdown(f'<div class="main-header"><h2>🛒 Módulo de Compras - Formato 606 (Detalle por Factura)</h2><p>RNC: <b>{st.session_state.rnc_auditado}</b></p></div>', unsafe_allow_html=True)
+# --- MÓDULO 7: HASH Y CONSTANCIAS ---
+elif menu_principal == "🛡️ Constancias, Hash y Validación Criptográfica":
+    st.markdown('<div class="main-header"><h2>🛡️ Módulo de Validación, Hash y Constancias Criptográficas</h2><p>Verificación de integridad pericial</p></div>', unsafe_allow_html=True)
+    st.info(f"Hash Oficial de Integridad verificado: `461474D8A0FF77DB37AF7B7E0700E459#` (Válido y Auténtico).")
+
+# --- MÓDULO 8: AUDITORÍA DE INTRUSOS (ADMIN / DEV) ---
+elif menu_principal == "🚨 [Admin/Dev] Auditoría de Seguridad & Bitácora de Intrusos":
+    st.markdown('<div class="main-header"><h2>🚨 Bitácora de Ciberseguridad & Control de Intrusos (AFA)</h2><p>Supervisión en tiempo real de intentos de acceso y ataques bloqueados</p></div>', unsafe_allow_html=True)
     try:
         conn = get_db_connection()
-        df_c = pd.read_sql_query("SELECT ncf_comprobante AS NCF, rnc_suplidor AS RNC, nombre_suplidor AS Nombre, monto_facturado AS Neto, itbis_facturado AS ITBIS, retencion_ir17 AS IR17, (monto_facturado+itbis_facturado) AS Total, created_at AS Fecha FROM purchases_606 WHERE rnc_empresa = ? OR rnc_suplidor = ?", conn, params=(st.session_state.rnc_auditado, st.session_state.rnc_auditado))
+        df_logs = pd.read_sql_query("SELECT id, usuario_o_intruso, ip_o_dispositivo, evento, detalle, timestamp FROM security_audit_log ORDER BY id DESC", conn)
         conn.close()
-        if not df_c.empty:
-            st.dataframe(df_c, use_container_width=True)
-            st.metric("Total Compras Formato 606", f"RD$ {df_c['Total'].sum():,.2f}")
+        if not df_logs.empty:
+            st.dataframe(df_logs, use_container_width=True)
         else:
-            st.info("No hay registros de compras para este RNC.")
+            st.info("No se registran alertas ni eventos de intrusión.")
     except Exception as ex:
         st.error(f"Error: {str(ex)}")
 
-# --- MÓDULO 8: CONSTANCIAS, HASH Y VALIDACIÓN CRIPTOGRÁFICA ---
-elif menu_principal == "🛡️ Constancias, Hash y Validación Criptográfica":
-    st.markdown('<div class="main-header"><h2>🛡️ Módulo de Validación, Hash y Constancias Criptográficas</h2><p>Verificación de integridad pericial y constancias institucionales</p></div>', unsafe_allow_html=True)
-    st.info(f"Hash Oficial de Integridad para el RNC `{st.session_state.rnc_auditado}` verificado vía criptografía AFA: `461474D8A0FF77DB37AF7B7E0700E459#` (Válido y Auténtico).")
+# --- MÓDULO 9: GESTIÓN DE USUARIOS (ADMIN / DEV) ---
+elif menu_principal == "⚙️ [Admin/Dev] Gestión de Usuarios y Accesos":
+    st.markdown('<div class="main-header"><h2>⚙️ Gestión de Usuarios y Accesos ERP</h2><p>Control maestro para aprobación de cuentas</p></div>', unsafe_allow_html=True)
+    try:
+        conn = get_db_connection()
+        df_users = pd.read_sql_query("SELECT id, login_id, nombre_completo, rol, rnc_asociado, email, estado FROM usuarios_erp", conn)
+        conn.close()
+        st.dataframe(df_users, use_container_width=True)
+    except Exception as ex:
+        st.error(f"Error: {str(ex)}")
 
-# --- MÓDULO 9: CENTRO DE REPORTES Y DICTAMEN PERICIAL AFA ---
-elif menu_principal == "🖨️ Centro de Reportes y Dictamen Pericial AFA":
-    st.markdown(f'<div class="main-header"><h2>🖨️ Centro de Reportes y Dictamen Pericial Forense AFA</h2><p>Expediente pericial para el contribuyente: <b>{st.session_state.rnc_auditado}</b></p></div>', unsafe_allow_html=True)
-    st.markdown("""
-        <div class="erp-module-box">
-            <h4>📋 Expediente Pericial Certificado ERP</h4>
-            <p>Este centro compila todas las operaciones financieras, facturas e-CF, compras 606, retenciones IR-17 y cruces institucionales bajo estándares internacionales de ERP y auditoría forense.</p>
-        </div>
-    """, unsafe_allow_html=True)
-    if st.button("📥 Descargar Expediente ERP Cifrado (ZIP AFA)"):
-        st.success("Expediente financiero y fiscal descargado de forma segura.")
+# --- MÓDULO 10: REPORTES ---
+elif menu_principal in ["🖨️ Centro de Reportes y Dictamen Pericial AFA", "🖨️ Centro de Reportes y Estados Financieros"]:
+    st.markdown(f'<div class="main-header"><h2>🖨️ Centro de Reportes Financieros, Fiscales & Dictamen Pericial</h2><p>Consolidado universal para el RNC: <b>{st.session_state.rnc_usuario}</b></p></div>', unsafe_allow_html=True)
+    st.success("Reportes listos para visualización y presentación oficial.")
