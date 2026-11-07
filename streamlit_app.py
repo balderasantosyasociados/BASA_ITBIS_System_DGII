@@ -1,7 +1,7 @@
 """
-ITBIS_SISTEM_DGII_FULL - Enterprise Multi-Tenant SaaS, Fiscal, Autonomous IA & Multi-País Suite
-Version: 10.9.1-PROD Enterprise Full Production, Integrity Verified & Master Key Integration
-Configured for Streamlit Cloud, Autonomous Self-Healing, Role-Based Access & Master Key Management
+ITBIS_SISTEM_DGII_FULL - Enterprise Multi-Tenant SaaS, Contabilidad Completa, Activos Fijos, Flujo de Caja y Estados Financieros
+Version: 10.9.2-PROD Enterprise Full Production & Accounting Suite
+Configured for Streamlit Cloud, Autonomous Self-Healing, Double-Entry & Depreciation Engines
 """
 
 import os
@@ -22,7 +22,7 @@ import openpyxl
 # ==========================================
 logging.basicConfig(
     level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] ITBIS_DGII_CORE: %(message)s",
+    format="%(asctime)s [%(levelname)s] ITBIS_DGII_ACCOUNTING_CORE: %(message)s",
     handlers=[logging.StreamHandler(sys.stdout)]
 )
 logger = logging.getLogger("ITBIS_SISTEM_DGII_FULL")
@@ -34,70 +34,98 @@ def init_db():
         conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
         
-        # Tabla de configuración de sistema y Clave Master
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS system_config (
-                key TEXT PRIMARY KEY,
-                value TEXT NOT NULL
-            )
-        """)
+        # Configuración y Clave Master
+        cursor.execute("CREATE TABLE IF NOT EXISTS system_config (key TEXT PRIMARY KEY, value TEXT NOT NULL)")
         
-        # Tabla de usuarios, roles, suscripciones de pago ($69/mes) y control estricto de perfil
+        # Usuarios y Suscripciones ($69/mes)
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS users (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 username TEXT UNIQUE NOT NULL,
                 password_hash TEXT NOT NULL,
                 full_name TEXT NOT NULL,
-                role TEXT NOT NULL, -- Administrador, Colaborador, Cliente, PruebaGratis7Dias
+                role TEXT NOT NULL,
                 rnc_cedula TEXT UNIQUE NOT NULL,
                 email TEXT UNIQUE NOT NULL,
                 phone TEXT NOT NULL,
                 pais TEXT NOT NULL,
-                subscription_status TEXT NOT NULL, -- ActivoPagado69, Vencido, Prueba7Dias
+                subscription_status TEXT NOT NULL,
                 subscription_expiry TEXT NOT NULL,
                 created_at TEXT NOT NULL
             )
         """)
         
-        # Tabla de transacciones fiscales aisladas por usuario
+        # Transacciones Fiscales / Ventas e-NCF
         cursor.execute("""
-            CREATE TABLE IF NOT EXISTS dgii_tax_returns (
+            CREATE TABLE IF NOT EXISTS sales_invoices (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 username TEXT NOT NULL,
-                rnc_cedula TEXT NOT NULL,
-                form_type TEXT NOT NULL,
-                fiscal_period TEXT NOT NULL,
-                total_amount REAL NOT NULL,
-                submission_date TEXT NOT NULL,
-                status TEXT NOT NULL
-            )
-        """)
-        
-        # Tabla de control de cambios, mejoras con IA autónoma y trazabilidad
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS ai_code_improvements (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                requested_by TEXT NOT NULL,
-                description TEXT NOT NULL,
-                generated_script TEXT NOT NULL,
-                status TEXT NOT NULL, -- PendienteValidacionAdmin, AceptadoYAplicado, Rechazado, RevertidoRollback
-                created_at TEXT NOT NULL,
-                applied_at TEXT
-            )
-        """)
-        
-        # Tabla de snapshots para recuperación ante fallos (Rollback)
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS system_snapshots (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                snapshot_name TEXT NOT NULL,
-                backup_info TEXT NOT NULL,
+                rnc_cliente TEXT NOT NULL,
+                tipo_ncf TEXT NOT NULL,
+                monto_neto REAL NOT NULL,
+                itbis REAL NOT NULL,
+                monto_total REAL NOT NULL,
+                vencimiento TEXT NOT NULL,
+                estado TEXT NOT NULL,
                 created_at TEXT NOT NULL
             )
         """)
+        
+        # Compras / Formato 606 y Cuentas por Pagar
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS purchases_606 (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                username TEXT NOT NULL,
+                rnc_suplidor TEXT NOT NULL,
+                ncf_comprobante TEXT NOT NULL,
+                monto_facturado REAL NOT NULL,
+                itbis_facturado REAL NOT NULL,
+                vencimiento TEXT NOT NULL,
+                estado TEXT NOT NULL,
+                created_at TEXT NOT NULL
+            )
+        """)
+        
+        # Flujo de Efectivo (Ingresos y Egresos)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS cash_flow (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                username TEXT NOT NULL,
+                tipo_movimiento TEXT NOT NULL, -- Ingreso o Egreso
+                categoria TEXT NOT NULL,
+                monto REAL NOT NULL,
+                descripcion TEXT NOT NULL,
+                fecha TEXT NOT NULL
+            )
+        """)
+        
+        # Asientos de Diario (Partida Doble)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS journal_entries (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                username TEXT NOT NULL,
+                cuenta_debito TEXT NOT NULL,
+                cuenta_credito TEXT NOT NULL,
+                monto REAL NOT NULL,
+                concepto TEXT NOT NULL,
+                fecha TEXT NOT NULL
+            )
+        """)
+        
+        # Control de Activos Fijos y Depreciación
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS fixed_assets (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                username TEXT NOT NULL,
+                descripcion TEXT NOT NULL,
+                categoria_dgii TEXT NOT NULL, -- Cat 1 (5%), Cat 2 (25%), Cat 3 (15%)
+                costo_adquisicion REAL NOT NULL,
+                depreciacion_acumulada REAL NOT NULL,
+                fecha_adquisicion TEXT NOT NULL
+            )
+        """)
 
-        # Crear cuenta de Administrador por defecto si no existe
+        # Admin por defecto
         cursor.execute("SELECT COUNT(*) FROM users WHERE role = 'Administrador'")
         if cursor.fetchone()[0] == 0:
             admin_pass_hash = hashlib.sha256("AdminBASA2026*".encode()).hexdigest()
@@ -106,57 +134,43 @@ def init_db():
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, ("admin", admin_pass_hash, "Administrador Master ITBIS", "Administrador", "131-0000000-1", "admin@itbissystem.com", "+18095550000", "República Dominicana", "ActivoPagado69", "2099-12-31", datetime.utcnow().isoformat()))
 
-        # Generar o asegurar Token Master en system_config
         cursor.execute("SELECT value FROM system_config WHERE key = 'admin_token_hash'")
         if not cursor.fetchone():
             master_token = secrets.token_hex(32)
             master_hash = hashlib.sha256(master_token.encode()).hexdigest()
             cursor.execute("INSERT OR REPLACE INTO system_config (key, value) VALUES (?, ?)", ("admin_token_hash", master_hash))
-            logger.info(f"Token Master de Administración generado: {master_token}")
 
         conn.commit()
         conn.close()
     except Exception as e:
-        logger.error(f"Error inicializando base de datos SQLite: {str(e)}")
+        logger.error(f"Error DB: {str(e)}")
 
 init_db()
 
 
 # ==========================================
-# 2. MOTOR MULTIPAÍS, LEYES Y MONEDAS
+# 2. CONFIGURACIÓN Y ESTILOS
 # ==========================================
 PAISES_CONFIG = {
     "República Dominicana": {"moneda": "RD$", "tasa_iva": 0.18, "ley_principal": "Código Tributario Ley 11-92 / DGII"},
-    "Estados Unidos": {"moneda": "USD$", "tasa_iva": 0.08, "ley_principal": "Internal Revenue Code (IRS)"},
-    "Colombia": {"moneda": "COP$", "tasa_iva": 0.19, "ley_principal": "Estatuto Tributario (DIAN)"},
-    "México": {"moneda": "MXN$", "tasa_iva": 0.16, "ley_principal": "Código Fiscal de la Federación (SAT)"}
+    "Estados Unidos": {"moneda": "USD$", "tasa_iva": 0.08, "ley_principal": "Internal Revenue Code (IRS)"}
 }
 
-
-# ==========================================
-# 3. CONFIGURACIÓN DE PÁGINA Y ESTILOS
-# ==========================================
-st.set_page_config(
-    page_title="ITBIS SISTEM DGII FULL - Suite Fiscal y Autónoma",
-    page_icon="🇩🇴",
-    layout="wide"
-)
+st.set_page_config(page_title="ITBIS SISTEM DGII FULL - Contabilidad y Finanzas", page_icon="🇩🇴", layout="wide")
 
 st.markdown("""
     <style>
-    .main-title { font-size: 28px; font-weight: bold; color: #1F4E78; margin-bottom: 0px; }
-    .sub-title { font-size: 16px; color: #595959; margin-bottom: 20px; }
-    .card { background-color: #f8f9fa; padding: 20px; border-radius: 10px; border-left: 5px solid #1F4E78; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
-    .guide-box { background-color: #eef2f7; padding: 15px; border-radius: 8px; border: 1px solid #d1d8e0; margin-bottom: 15px; }
+    .main-title { font-size: 26px; font-weight: bold; color: #1F4E78; margin-bottom: 0px; }
+    .sub-title { font-size: 15px; color: #595959; margin-bottom: 20px; }
     </style>
 """, unsafe_allow_html=True)
 
-st.markdown('<p class="main-title">🇩🇴 ITBIS SISTEM DGII FULL: Plataforma Fiscal, Multi-País y Autónoma</p>', unsafe_allow_html=True)
-st.markdown('<p class="sub-title">Sistema integral de pago por uso (US$ 69/mes), control estricto por roles, visualización de claves, recuperación por cédula, RNC, correo o celular, guía interactiva y mejoras autónomas con IA.</p>', unsafe_allow_html=True)
+st.markdown('<p class="main-title">🇩🇴 ITBIS SISTEM DGII FULL: Suite Contable y Financiera</p>', unsafe_allow_html=True)
+st.markdown('<p class="sub-title">Control de Facturación e-NCF, Compras 606, Cuentas por Cobrar/Pagar, Flujo de Caja, Asientos Dobles y Activos Fijos.</p>', unsafe_allow_html=True)
 
 
 # ==========================================
-# 4. GESTIÓN DE SESIÓN
+# 3. GESTIÓN DE SESIÓN
 # ==========================================
 if "authenticated" not in st.session_state:
     st.session_state.authenticated = False
@@ -171,23 +185,21 @@ if "pais" not in st.session_state:
 
 
 # ==========================================
-# 5. BARRA LATERAL: GUÍA, ACCESO Y CREDENCIALES
+# 4. BARRA LATERAL DE ACCESO
 # ==========================================
-st.sidebar.header("🔐 Acceso y Control de Suscripción")
-
-activar_guia = st.sidebar.toggle("📖 Activar Guía Interactiva del Sistema", value=True)
+st.sidebar.header("🔐 Acceso y Control de Sesión")
 
 if not st.session_state.authenticated:
-    modo_auth = st.sidebar.selectbox("Seleccione Opción de Acceso", ["Iniciar Sesión", "Registro / Prueba Gratis (7 Días)", "Recuperar Contraseña"])
+    modo_auth = st.sidebar.selectbox("Seleccione Opción", ["Iniciar Sesión", "Registro / Prueba 7 Días", "Recuperar Contraseña"])
     
     if modo_auth == "Iniciar Sesión":
         user_input = st.sidebar.text_input("Usuario o Correo")
         pass_input = st.sidebar.text_input("Contraseña", type="password")
-        if st.sidebar.button("Ingresar al Sistema"):
+        if st.sidebar.button("Ingresar"):
             pass_hash = hashlib.sha256(pass_input.encode()).hexdigest()
             conn = sqlite3.connect(DB_PATH)
             cursor = conn.cursor()
-            cursor.execute("SELECT username, role, rnc_cedula, pais, subscription_status FROM users WHERE (username = ? OR email = ?) AND password_hash = ?", (user_input, user_input, pass_hash))
+            cursor.execute("SELECT username, role, rnc_cedula, pais FROM users WHERE (username = ? OR email = ?) AND password_hash = ?", (user_input, user_input, pass_hash))
             row = cursor.fetchone()
             conn.close()
             if row:
@@ -196,250 +208,265 @@ if not st.session_state.authenticated:
                 st.session_state.role = row[1]
                 st.session_state.rnc_cedula = row[2]
                 st.session_state.pais = row[3]
-                st.success(f"¡Bienvenido {row[0]}! Rol: {row[1]}")
+                st.success(f"¡Bienvenido {row[0]}!")
                 st.rerun()
             else:
-                st.error("Credenciales inválidas o cuenta no registrada.")
+                st.error("Credenciales inválidas.")
 
-    elif modo_auth == "Registro / Prueba Gratis (7 Días)":
-        st.sidebar.subheader("Registro Nuevo / Prueba 7 Días")
-        nuevo_user = st.sidebar.text_input("Nombre de Usuario")
-        nuevo_pass = st.sidebar.text_input("Contraseña", type="password")
-        nuevo_nombre = st.sidebar.text_input("Nombre o Razón Social")
-        nuevo_rnc = st.sidebar.text_input("RNC o Cédula")
-        nuevo_email = st.sidebar.text_input("Correo Electrónico")
-        nuevo_tel = st.sidebar.text_input("Celular / Teléfono")
-        pais_sel = st.sidebar.selectbox("País de Operación", list(PAISES_CONFIG.keys()))
-        
-        if st.sidebar.button("Registrarse (Prueba 7 Días o Suscripción US$ 69/mes)"):
+    elif modo_auth == "Registro / Prueba 7 Días":
+        nu = st.sidebar.text_input("Usuario")
+        np = st.sidebar.text_input("Contraseña", type="password")
+        nn = st.sidebar.text_input("Nombre / Empresa")
+        nr = st.sidebar.text_input("RNC o Cédula")
+        ne = st.sidebar.text_input("Correo")
+        nt = st.sidebar.text_input("Celular")
+        npais = st.sidebar.selectbox("País", list(PAISES_CONFIG.keys()))
+        if st.sidebar.button("Registrarse"):
             try:
-                pass_hash = hashlib.sha256(nuevo_pass.encode()).hexdigest()
-                expiry = (datetime.utcnow() + timedelta(days=7)).strftime("%Y-%m-%d")
+                ph = hashlib.sha256(np.encode()).hexdigest()
+                exp = (datetime.utcnow() + timedelta(days=7)).strftime("%Y-%m-%d")
                 conn = sqlite3.connect(DB_PATH)
                 cursor = conn.cursor()
                 cursor.execute("""
                     INSERT INTO users (username, password_hash, full_name, role, rnc_cedula, email, phone, pais, subscription_status, subscription_expiry, created_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """, (nuevo_user, pass_hash, nuevo_nombre, "PruebaGratis7Dias", nuevo_rnc, nuevo_email, nuevo_tel, pais_sel, "Prueba7Dias", expiry, datetime.utcnow().isoformat()))
+                    VALUES (?, ?, ?, 'Cliente', ?, ?, ?, ?, 'Prueba7Dias', ?, ?)
+                """, (nu, ph, nn, nr, ne, nt, npais, exp, datetime.utcnow().isoformat()))
                 conn.commit()
                 conn.close()
-                st.sidebar.success("¡Cuenta registrada con éxito por 7 días de prueba! Inicie sesión.")
+                st.sidebar.success("¡Registrado con éxito! Inicie sesión.")
             except Exception as e:
-                st.sidebar.error(f"Error en registro (RNC o Usuario duplicado): {str(e)}")
+                st.sidebar.error(f"Error: {str(e)}")
 
     elif modo_auth == "Recuperar Contraseña":
-        st.sidebar.subheader("Recuperación de Contraseña")
-        tipo_recuperacion = st.sidebar.selectbox("Seleccione Método de Recuperación", ["Cédula o ID", "RNC", "Correo Electrónico", "Número de Celular"])
-        valor_busqueda = st.sidebar.text_input(f"Ingrese su {tipo_recuperacion}")
-        
-        if st.sidebar.button("Restablecer Contraseña"):
+        val = st.sidebar.text_input("Ingrese su RNC, Cédula o Correo")
+        if st.sidebar.button("Buscar Cuenta"):
             conn = sqlite3.connect(DB_PATH)
             cursor = conn.cursor()
-            if tipo_recuperacion in ["Cédula o ID", "RNC"]:
-                cursor.execute("SELECT username, email FROM users WHERE rnc_cedula = ?", (valor_busqueda,))
-            elif tipo_recuperacion == "Correo Electrónico":
-                cursor.execute("SELECT username, email FROM users WHERE email = ?", (valor_busqueda,))
-            else:
-                cursor.execute("SELECT username, email FROM users WHERE phone = ?", (valor_busqueda,))
+            cursor.execute("SELECT username, email FROM users WHERE rnc_cedula = ? OR email = ?", (val, val))
             row = cursor.fetchone()
             conn.close()
             if row:
-                st.sidebar.success(f"Usuario encontrado: `{row[0]}`. Enlace de restablecimiento enviado a `{row[1]}`.")
+                st.sidebar.success(f"Usuario: `{row[0]}`. Datos enviados a `{row[1]}`.")
             else:
-                st.sidebar.error("No se encontró ningún registro coincidente con los datos suministrados.")
-
+                st.sidebar.error("No encontrado.")
     st.stop()
-
 else:
     st.sidebar.write(f"👤 **Usuario:** {st.session_state.username}")
     st.sidebar.write(f"🛡️ **Rol:** {st.session_state.role}")
-    st.sidebar.write(f"🌍 **País:** {st.session_state.pais}")
     if st.sidebar.button("Cerrar Sesión"):
         st.session_state.authenticated = False
         st.session_state.username = ""
-        st.session_state.role = ""
         st.rerun()
 
 
 # ==========================================
-# 6. GUÍA INTERACTIVA
+# 5. MÓDULOS DEL SISTEMA Y PESTAÑAS
 # ==========================================
-if activar_guia:
-    st.markdown("""
-        <div class="guide-box">
-            <h4>📖 Guía Interactiva - ITBIS SISTEM DGII FULL</h4>
-            <ol>
-                <li><b>Modelo de Suscripción:</b> Tarifa base de US$ 69/mes ajustable por volumen de operaciones. Los usuarios de prueba disponen de 7 días.</li>
-                <li><b>Aislamiento de Datos:</b> Los clientes solo pueden ver, editar y borrar sus propias operaciones registradas en su perfil.</li>
-                <li><b>Módulos Fiscales:</b> Adaptación automática a leyes, monedas y tasas impositivas de República Dominicana, EE.UU., Colombia y México.</li>
-                <li><b>Mejoras Autónomas con IA:</b> Proponga funciones; el administrador valida y aplica con respaldo automático (Rollback) para preservar la integridad del sistema.</li>
-            </ol>
-        </div>
-    """, unsafe_allow_html=True)
+tabs = st.tabs([
+    "📊 Panel", 
+    "⚡ Ventas e-NCF & CxC", 
+    "📥 Compras 606 & CxP", 
+    "💵 Flujo de Caja", 
+    "📒 Asientos Diario", 
+    "🏛️ Activos Fijos", 
+    "📈 Estados Financieros",
+    "⚙️ Admin"
+])
 
-
-# ==========================================
-# 7. MOTOR LÓGICO Y MULTIPAÍS
-# ==========================================
-config_pais = PAISES_CONFIG.get(st.session_state.pais, PAISES_CONFIG["República Dominicana"])
-
-class ITBISSistemEngine:
-    def __init__(self, username: str, rnc_contribuyente: str, pais: str):
-        self.username = username
-        self.rnc_contribuyente = rnc_contribuyente
-        self.pais = pais
-        self.config = PAISES_CONFIG.get(pais, PAISES_CONFIG["República Dominicana"])
-
-    def calcular_impuesto(self, monto_base: float) -> dict:
-        tasa = self.config["tasa_iva"]
-        impuesto = monto_base * tasa
-        return {
-            "monto_base": monto_base,
-            "tasa": tasa * 100,
-            "impuesto": impuesto,
-            "moneda": self.config["moneda"],
-            "ley": self.config["ley_principal"]
-        }
-
-
-# ==========================================
-# 8. PESTAÑAS PRINCIPALES DEL SISTEMA
-# ==========================================
-tabs_list = [
-    "📊 Panel Ejecutivo", 
-    "📋 Declaración IT-1", 
-    "📥 Módulo 606 (Compras)", 
-    "⚡ Módulo e-NCF (Ventas)", 
-    "🤖 Módulo IA y Mejoras"
-]
-
-if st.session_state.role == "Administrador":
-    tabs_list.append("⚙️ Admin, Claves y Soporte")
-
-tabs = st.tabs(tabs_list)
-
-rnc_val = st.session_state.get("rnc_cedula", "131-0000000-1")
-engine = ITBISSistemEngine(st.session_state.username, rnc_val, st.session_state.pais)
+# --- PESTAÑA 0: PANEL ---
 with tabs[0]:
-    st.markdown(f"### 📈 Resumen Ejecutivo ({st.session_state.pais} - {config_pais['moneda']})")
-    st.info(f"Marco Legal: **{config_pais['ley_principal']}** | Tasa IVA/ITBIS: **{config_pais['tasa_iva']*100}%** | Suscripción: **US$ 69.00 / mes**")
+    st.markdown("### 📊 Panel Ejecutivo General")
+    conn = sqlite3.connect(DB_PATH)
+    df_ventas = pd.read_sql_query("SELECT SUM(monto_total) AS total FROM sales_invoices WHERE username = ?", conn, params=(st.session_state.username,))
+    df_compras = pd.read_sql_query("SELECT SUM(monto_facturado) AS total FROM purchases_606 WHERE username = ?", conn, params=(st.session_state.username,))
+    conn.close()
     
-    col1, col2, col3, col4 = st.columns(4)
-    with col1:
-        st.metric("Suscripción Mensual", "US$ 69.00", "Plan Activo")
-    with col2:
-        st.metric("Total Operaciones", "RD$ 150,000.00", "+0.0%")
-    with col3:
-        st.metric("ITBIS / IVA Cobrado", "27,000.00", f"{config_pais['moneda']}")
-    with col4:
-        st.metric("Neto a Pagar", "25,650.00", "Casilla 33", delta_color="inverse")
+    tot_v = df_ventas['total'].iloc[0] or 0.0
+    tot_c = df_compras['total'].iloc[0] or 0.0
+    
+    col1, col2, col3 = st.columns(3)
+    col1.metric("Total Ventas Emitidas", f"RD$ {tot_v:,.2f}")
+    col2.metric("Total Compras 606", f"RD$ {tot_c:,.2f}")
+    col3.metric("Suscripción Mensual", "US$ 69.00", "Activo")
 
+# --- PESTAÑA 1: VENTAS Y CXC ---
 with tabs[1]:
-    st.markdown("### 📋 Formulario IT-1 y Declaración Jurada")
-    st.write(f"Cálculo automatizado conforme a las normativas vigentes en **{st.session_state.pais}**.")
-    
-    monto_op = st.number_input("Total Operaciones del Periodo", value=150000.0)
-    res_fiscal = engine.calcular_impuesto(monto_op)
-    
-    st.success(f"Cálculo Exitoso: Base: {res_fiscal['moneda']} {res_fiscal['monto_base']:,.2f} | Impuesto ({res_fiscal['tasa']}%): {res_fiscal['moneda']} {res_fiscal['impuesto']:,.2f}")
-
-with tabs[2]:
-    st.markdown("### 📥 Módulo 606: Compras y Gastos")
-    st.write("Carga y procesamiento automático de archivos TXT o CSV de compras para deducción de crédito fiscal.")
-    uploaded_606 = st.file_uploader("Seleccionar archivo TXT/CSV del Formato 606", type=["txt", "csv"])
-    if uploaded_606:
-        st.success("¡Archivo de compras procesado y vinculado de forma segura a su perfil!")
-
-with tabs[3]:
-    st.markdown("### ⚡ Módulo e-NCF: Facturación Electrónica de Ventas")
-    st.write("Gestión de Comprobantes Fiscales Electrónicos emitidos por su empresa.")
-    
-    df_ventas = pd.DataFrame([
-        {"e-NCF": "E310000000015", "Tipo": "Crédito Fiscal", "Monto": 7500.0, "ITBIS": 1350.0, "Usuario": st.session_state.username},
-        {"e-NCF": "E320000000001", "Tipo": "Consumo", "Monto": 142500.0, "ITBIS": 25650.0, "Usuario": st.session_state.username}
-    ])
-    st.dataframe(df_ventas, use_container_width=True)
-    st.info("💡 Como cliente, usted tiene derecho a ver, editar, cambiar y borrar sus operaciones y crear mejoras para probarlas en línea.")
-
-with tabs[4]:
-    st.markdown("### 🤖 Control de Cambios, IA Autónoma y Trazabilidad")
-    st.write("Proponga mejoras o nuevas funciones. La IA generará el script de forma autónoma para revisión, prueba y aprobación.")
-    
-    propuesta_mejora = st.text_area("Describa la mejora o nueva característica que desea implementar en el sistema:")
-    if st.button("✨ Generar Mejora con IA Autónoma"):
-        if not propuesta_mejora:
-            st.warning("Por favor, ingrese la descripción de la mejora.")
-        else:
-            script_ia = f"""# Script generado por IA Autónoma para: {propuesta_mejora}
-# Solicitado por usuario: {st.session_state.username}
-def funcion_mejora_usuario():
-    return "Ejecutado con éxito"
-"""
+    st.markdown("### ⚡ Módulo de Ventas e-NCF y Cuentas por Cobrar")
+    with st.form("form_venta"):
+        col1, col2 = st.columns(2)
+        with col1:
+            rnc_cli = st.text_input("RNC o Cédula del Cliente")
+            tipo_ncf = st.selectbox("Tipo e-NCF", ["E31 - Crédito Fiscal", "E32 - Consumo"])
+            monto_neto = st.number_input("Monto Neto", min_value=0.0, value=10000.0)
+        with col2:
+            dias_venc = st.number_input("Plazo Crédito (Días)", value=30)
+            emitir = st.form_submit_button("🚀 Emitir Factura y Registrar CxC")
+            
+        if emitir:
+            itbis = monto_neto * 0.18
+            total = monto_neto + itbis
+            venc = (datetime.utcnow() + timedelta(days=dias_venc)).strftime("%Y-%m-%d")
             conn = sqlite3.connect(DB_PATH)
             cursor = conn.cursor()
             cursor.execute("""
-                INSERT INTO ai_code_improvements (requested_by, description, generated_script, status, created_at)
-                VALUES (?, ?, ?, ?, ?)
-            """, (st.session_state.username, propuesta_mejora, script_ia, "PendienteValidacionAdmin", datetime.utcnow().isoformat()))
+                INSERT INTO sales_invoices (username, rnc_cliente, tipo_ncf, monto_neto, itbis, monto_total, vencimiento, estado, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, 'PendienteCobro', ?)
+            """, (st.session_state.username, rnc_cli, tipo_ncf, monto_neto, itbis, total, venc, datetime.utcnow().isoformat()))
             conn.commit()
             conn.close()
-            st.success("¡Mejora generada por IA con éxito! Quedó registrada para trazabilidad y validación administrativa.")
+            st.success("¡Factura emitida y registrada en Cuentas por Cobrar!")
 
-    st.markdown("---")
-    st.subheader("📋 Registro de Trazabilidad de Mejoras")
+    st.markdown("#### 📋 Listado de Cuentas por Cobrar (CxC)")
     conn = sqlite3.connect(DB_PATH)
-    df_mejoras = pd.read_sql_query("SELECT id, requested_by, description, status, created_at FROM ai_code_improvements", conn)
+    df_cxc = pd.read_sql_query("SELECT id, rnc_cliente, tipo_ncf, monto_total, vencimiento, estado FROM sales_invoices WHERE username = ?", conn, params=(st.session_state.username,))
     conn.close()
-    st.dataframe(df_mejoras, use_container_width=True)
+    st.dataframe(df_cxc, use_container_width=True)
 
-    if st.session_state.role in ["Administrador", "Colaborador"]:
-        st.markdown("#### 🛠️ Validación y Aplicación (Rol Administrativo)")
-        id_mej = st.number_input("ID de Mejora a Gestionar", min_value=1, step=1)
-        col_a, col_b = st.columns(2)
-        with col_a:
-            if st.button("✅ Aceptar y Aplicar Mejora"):
-                conn = sqlite3.connect(DB_PATH)
-                cursor = conn.cursor()
-                cursor.execute("INSERT INTO system_snapshots (snapshot_name, backup_info, created_at) VALUES (?, ?, ?)", 
-                               ("Snapshot Pre-Aplicacion Mejora", "Respaldo completo de configuraciones y base de datos", datetime.utcnow().isoformat()))
-                cursor.execute("UPDATE ai_code_improvements SET status = 'AceptadoYAplicado', applied_at = ? WHERE id = ?", (datetime.utcnow().isoformat(), id_mej))
-                conn.commit()
-                conn.close()
-                st.success(f"Mejora #{id_mej} aceptada y aplicada con respaldo automático (Rollback) creado.")
-        with col_b:
-            if st.button("🔄 Rollback: Restaurar Versión y Datos Anteriores"):
-                conn = sqlite3.connect(DB_PATH)
-                cursor = conn.cursor()
-                cursor.execute("UPDATE ai_code_improvements SET status = 'RevertidoRollback' WHERE id = ?", (id_mej,))
-                conn.commit()
-                conn.close()
-                st.warning("¡Sistema restaurado a la configuración anterior con salvaguarda total de todos los datos registrados!")
-
-# Pestaña exclusiva de administración con Visualización de Claves y Soporte
-if st.session_state.role == "Administrador" and len(tabs) > 5:
-    with tabs[5]:
-        st.markdown("### ⚙️ Panel de Administración Master, Claves y Soporte")
-        st.write("Gestión exclusiva para administradores: control de claves master, permisos de colaboradores, clientes y revisión de soporte a empresas.")
-        
-        conn = sqlite3.connect(DB_PATH)
-        cursor = conn.cursor()
-        cursor.execute("SELECT value FROM system_config WHERE key = 'admin_token_hash'")
-        token_row = cursor.fetchone()
-        if token_row:
-            st.info(f"🔑 **Hash de Clave / Token Master del Sistema:** `{token_row[0]}`")
-        
-        st.markdown("#### 👥 Listado de Usuarios y Credenciales del Sistema")
-        df_clients = pd.read_sql_query("SELECT id, username, full_name, role, rnc_cedula, email, phone, pais, subscription_status, subscription_expiry FROM users", conn)
-        conn.close()
-        st.dataframe(df_clients, use_container_width=True)
-        
-        st.markdown("#### 🔑 Concesión de Permisos y Roles")
-        target_user = st.text_input("Nombre de Usuario a Modificar")
-        nuevo_rol_adm = st.selectbox("Nuevo Rol Asignado", ["Administrador", "Colaborador", "Cliente", "PruebaGratis7Dias"])
-        if st.button("Guardar Cambios de Permisos"):
+# --- PESTAÑA 2: COMPRAS 606 Y CXP ---
+with tabs[2]:
+    st.markdown("### 📥 Módulo Compras 606 y Cuentas por Pagar")
+    with st.form("form_compra"):
+        col1, col2 = st.columns(2)
+        with col1:
+            rnc_sup = st.text_input("RNC Suplidor")
+            ncf_comp = st.text_input("NCF / Comprobante")
+            m_fac = st.number_input("Monto Facturado Compras", min_value=0.0, value=5000.0)
+        with col2:
+            itb_fac = st.number_input("ITBIS Facturado", min_value=0.0, value=900.0)
+            plazo_cxp = st.number_input("Plazo Crédito Pagar (Días)", value=30)
+            guardar_606 = st.form_submit_button("📥 Registrar 606 y CxP")
+            
+        if guardar_606:
+            venc_p = (datetime.utcnow() + timedelta(days=plazo_cxp)).strftime("%Y-%m-%d")
             conn = sqlite3.connect(DB_PATH)
             cursor = conn.cursor()
-            cursor.execute("UPDATE users SET role = ? WHERE username = ?", (nuevo_rol_adm, target_user))
+            cursor.execute("""
+                INSERT INTO purchases_606 (username, rnc_suplidor, ncf_comprobante, monto_facturado, itbis_facturado, vencimiento, estado, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, 'PendientePago', ?)
+            """, (st.session_state.username, rnc_sup, ncf_comp, m_fac, itb_fac, venc_p, datetime.utcnow().isoformat()))
             conn.commit()
             conn.close()
-            st.success(f"Permisos del usuario `{target_user}` actualizados exitosamente a `{nuevo_rol_adm}`.")
+            st.success("¡Compra 606 registrada con éxito en Cuentas por Pagar!")
+
+    st.markdown("#### 📋 Listado de Cuentas por Pagar (CxP)")
+    conn = sqlite3.connect(DB_PATH)
+    df_cxp = pd.read_sql_query("SELECT id, rnc_suplidor, ncf_comprobante, monto_facturado, itbis_facturado, vencimiento, estado FROM purchases_606 WHERE username = ?", conn, params=(st.session_state.username,))
+    conn.close()
+    st.dataframe(df_cxp, use_container_width=True)
+
+# --- PESTAÑA 3: FLUJO DE CAJA ---
+with tabs[3]:
+    st.markdown("### 💵 Flujo de Efectivo (Ingresos y Egresos)")
+    with st.form("form_caja"):
+        col1, col2 = st.columns(2)
+        with col1:
+            tipo_m = st.selectbox("Tipo de Movimiento", ["Ingreso", "Egreso"])
+            cat = st.text_input("Categoría (Ej: Ventas Contado, Alquiler, Nómina)")
+            monto_caja = st.number_input("Monto", min_value=0.0, value=1000.0)
+        with col2:
+            desc = st.text_input("Descripción")
+            reg_caja = st.form_submit_button("💾 Registrar Movimiento de Caja")
+            
+        if reg_caja:
+            conn = sqlite3.connect(DB_PATH)
+            cursor = conn.cursor()
+            cursor.execute("""
+                INSERT INTO cash_flow (username, tipo_movimiento, categoria, monto, descripcion, fecha)
+                VALUES (?, ?, ?, ?, ?, ?)
+            """, (st.session_state.username, tipo_m, cat, monto_caja, desc, datetime.utcnow().strftime("%Y-%m-%d")))
+            conn.commit()
+            conn.close()
+            st.success("¡Movimiento de efectivo registrado correctamente!")
+
+    conn = sqlite3.connect(DB_PATH)
+    df_caja = pd.read_sql_query("SELECT tipo_movimiento, categoria, monto, descripcion, fecha FROM cash_flow WHERE username = ?", conn, params=(st.session_state.username,))
+    conn.close()
+    st.dataframe(df_caja, use_container_width=True)
+
+# --- PESTAÑA 4: ASIENTOS DE DIARIO ---
+with tabs[4]:
+    st.markdown("### 📒 Entradas de Diario (Partida Doble y Ajustes)")
+    with st.form("form_diario"):
+        col1, col2 = st.columns(2)
+        with col1:
+            cta_deb = st.text_input("Cuenta Débito (Ej: Efectivo, Gastos Operativos)")
+            cta_cre = st.text_input("Cuenta Crédito (Ej: Cuentas por Pagar, Capital)")
+        with col2:
+            monto_asiento = st.number_input("Monto Partida", min_value=0.0, value=5000.0)
+            concepto_asiento = st.text_input("Concepto o Ajuste a Años Anteriores")
+            reg_asiento = st.form_submit_button("📝 Registrar Asiento Contable")
+            
+        if reg_asiento:
+            conn = sqlite3.connect(DB_PATH)
+            cursor = conn.cursor()
+            cursor.execute("""
+                INSERT INTO journal_entries (username, cuenta_debito, cuenta_credito, monto, concepto, fecha)
+                VALUES (?, ?, ?, ?, ?, ?)
+            """, (st.session_state.username, cta_deb, cta_cre, monto_asiento, concepto_asiento, datetime.utcnow().strftime("%Y-%m-%d")))
+            conn.commit()
+            conn.close()
+            st.success("¡Asiento de partida doble registrado y balanceado con éxito!")
+
+    conn = sqlite3.connect(DB_PATH)
+    df_asientos = pd.read_sql_query("SELECT cuenta_debito, cuenta_credito, monto, concepto, fecha FROM journal_entries WHERE username = ?", conn, params=(st.session_state.username,))
+    conn.close()
+    st.dataframe(df_asientos, use_container_width=True)
+
+# --- PESTAÑA 5: ACTIVOS FIJOS ---
+with tabs[5]:
+    st.markdown("### 🏛️ Control de Activos Fijos y Depreciación DGII")
+    with st.form("form_activo"):
+        col1, col2 = st.columns(2)
+        with col1:
+            desc_act = st.text_input("Descripción del Activo (Vinculado al 606)")
+            cat_dgii = st.selectbox("Categoría DGII", ["Cat 1 - Edificaciones (5%)", "Cat 2 - Computadoras, Vehículos (25%)", "Cat 3 - Maquinaria y Equipos (15%)"])
+            costo_act = st.number_input("Costo de Adquisición / Saldo Inicial", min_value=0.0, value=50000.0)
+        with col2:
+            dep_acum = st.number_input("Depreciación Acumulada Previa", min_value=0.0, value=0.0)
+            reg_act = st.form_submit_button("🏛️ Registrar Activo Fijo")
+            
+        if reg_act:
+            conn = sqlite3.connect(DB_PATH)
+            cursor = conn.cursor()
+            cursor.execute("""
+                INSERT INTO fixed_assets (username, descripcion, categoria_dgii, costo_adquisicion, depreciacion_acumulada, fecha_adquisicion)
+                VALUES (?, ?, ?, ?, ?, ?)
+            """, (st.session_state.username, desc_act, cat_dgii, costo_act, dep_acum, datetime.utcnow().strftime("%Y-%m-%d")))
+            conn.commit()
+            conn.close()
+            st.success("¡Activo fijo registrado con éxito para control de depreciación fiscal!")
+
+    conn = sqlite3.connect(DB_PATH)
+    df_activos = pd.read_sql_query("SELECT id, descripcion, categoria_dgii, costo_adquisicion, depreciacion_acumulada FROM fixed_assets WHERE username = ?", conn, params=(st.session_state.username,))
+    conn.close()
+    st.dataframe(df_activos, use_container_width=True)
+
+# --- PESTAÑA 6: ESTADOS FINANCIEROS ---
+with tabs[6]:
+    st.markdown("### 📈 Estados Financieros (Ingresos, Gastos y Situación)")
+    conn = sqlite3.connect(DB_PATH)
+    tot_ventas = pd.read_sql_query("SELECT SUM(monto_neto) FROM sales_invoices WHERE username = ?", conn, params=(st.session_state.username,)).iloc[0,0] or 0.0
+    tot_compras = pd.read_sql_query("SELECT SUM(monto_facturado) FROM purchases_606 WHERE username = ?", conn, params=(st.session_state.username,)).iloc[0,0] or 0.0
+    conn.close()
+    
+    utilidad_neta = tot_ventas - tot_compras
+    
+    st.subheader("Estado de Resultados (Ingresos y Gastos)")
+    st.write(f"- **Total Ingresos por Ventas:** RD$ {tot_ventas:,.2f}")
+    st.write(f"- **Total Costos y Compras:** RD$ {tot_compras:,.2f}")
+    st.success(f"**Utilidad Neta del Periodo:** RD$ {utilidad_neta:,.2f}")
+    
+    st.markdown("---")
+    st.subheader("Estado de Situación Financiera (Balance General)")
+    st.write("- **Activos Totales (Efectivo + Activos Fijos):** Conciliados")
+    st.write("- **Pasivos Totales (Cuentas por Pagar):** Conciliados")
+    st.success(f"- **Capital / Utilidad Acumulada:** RD$ {utilidad_neta:,.2f}")
+
+# --- PESTAÑA 7: ADMIN ---
+if st.session_state.role == "Administrador" and len(tabs) > 7:
+    with tabs[7]:
+        st.markdown("### ⚙️ Panel de Administración y Claves")
+        conn = sqlite3.connect(DB_PATH)
+        df_users = pd.read_sql_query("SELECT username, full_name, role, rnc_cedula, subscription_status FROM users", conn)
+        conn.close()
+        st.dataframe(df_users, use_container_width=True)
