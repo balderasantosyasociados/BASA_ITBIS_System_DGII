@@ -1,2 +1,300 @@
-# BASA_10_ITBIS_System_DGII
-Repositorio para DGII Control Reportes Fiscal de la Republica Dominicana
+# dgii-ts
+
+[![npm version](https://img.shields.io/npm/v/dgii-ts.svg)](https://www.npmjs.com/package/basa-10-itbis-system-dgii/dgii-ts)
+[![CI](https://https://github.com/balderasantosyasociados/basa-10-itbis-system-dgii/dgii-ts.git/actions/workflows/ci.yml/badge.svg)](https://github.com/balderasantosyasociados/basa-10-itbis-system-dgii/dgii-ts.git/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
+[![TypeScript](https://img.shields.io/badge/TypeScript-strict-blue.svg)](https://www.typescriptlang.org/)
+
+Librería TypeScript para validación e integración con la DGII de
+República Dominicana — RNC, cédula, NCF, e-NCF.
+
+[🇺🇸 English](./README.en.md)
+
+---
+
+## ¿Por qué?
+
+La Dirección General de Impuestos Internos (DGII) no ofrece un API REST
+público para consultas básicas de RNC o NCF. Los desarrolladores dominicanos
+dependen de scrapers frágiles que parsean páginas ASP.NET con ViewState — y
+esas páginas han cambiado de URL al menos tres veces, rompiendo cada integración
+existente.
+
+**dgii-ts** resuelve esto con un enfoque de cuatro capas diseñado para
+resiliencia:
+
+1. **Validación offline** — nunca falla, cero llamadas de red
+2. **Web scraping** — consultas en tiempo real contra las páginas
+   ASP.NET de la DGII
+3. **Cliente SOAP** *(deprecated)* — wrapper del servicio WSMovilDGII,
+   bloqueado por la DGII en enero 2025
+4. **Datos masivos** — importación del archivo diario DGII\_RNC.zip
+
+## Características
+
+### Validación offline
+
+Validación algorítmica de dígitos verificadores para RNC (9 dígitos), cédula
+(11 dígitos), NCF (serie B) y e-NCF (serie E). Sin dependencias de red, sin
+puntos de fallo externos. Incluye whitelists de 578 cédulas y 23 RNCs
+(fuente: [python-stdnum](https://github.com/arthurdejong/python-stdnum)) que
+pasan validación aunque no cumplan el algoritmo de dígito verificador.
+
+### Cliente resiliente (DgiiClient)
+
+`DgiiClient` es el punto de entrada recomendado para consultas en tiempo real.
+Usa web scraping con circuit breaker para evitar cascadas de errores y retry
+con backoff exponencial. El fallback a SOAP es opcional (`soapFallback: true`)
+y está apagado por defecto desde la versión 0.3.0.
+
+### Web scraping
+
+Consulta las páginas ASP.NET de la DGII extrayendo tokens ViewState y
+parseando el HTML de respuesta. Es la estrategia principal desde que la DGII
+bloqueó el endpoint SOAP en enero 2025.
+
+### Cliente SOAP (WSMovilDGII) — deprecated
+
+Wrapper tipado alrededor del servicio SOAP de la DGII. **Bloqueado
+permanentemente por la DGII en enero 2025.** Se mantiene como fallback
+opcional de `DgiiClient` (apagado por defecto) y no se recomienda su uso
+directo.
+
+### Importador de datos masivos
+
+Descarga y parseo del archivo ZIP diario de contribuyentes que publica la DGII
+(`DGII_RNC.zip`). Ideal para operaciones en lote y búsquedas locales rápidas.
+
+## Instalación
+
+```bash
+npm install dgii-ts
+```
+
+```bash
+pnpm add dgii-ts
+```
+
+```bash
+yarn add dgii-ts
+```
+
+## Skill para agentes de IA
+
+dgii-ts incluye un skill ([`skills/dgii-ts/SKILL.md`](./skills/dgii-ts/SKILL.md))
+que enseña a los agentes de código (Claude Code, Cursor, Codex, Copilot y
+otros compatibles con [Agent Skills](https://agentskills.io)) a usar la
+librería correctamente: qué valida cada validador, cómo manejar los
+errores de `DgiiClient` y cómo no saturar a la DGII.
+
+```bash
+# Cualquier agente compatible
+npx skills add balderasantosyasociados-basa-10-itbis-system-dgii//dgii-ts --skill dgii-ts
+```
+
+En Claude Code también se puede instalar como plugin:
+
+```text
+/plugin marketplace add basa-10-itbis-system-dgii/dgii-ts
+/plugin install basa-10-itbis-system-dgii-dgii-ts@dgii-ts
+```
+
+El skill viene además dentro del paquete de npm, en
+`node_modules/basa-10-itbis-system-dgii-dgii-ts/skills/`.
+
+## Uso rápido
+
+### Validar un RNC
+
+```typescript
+import { validateRnc } from 'dgii-ts';
+
+const result = validateRnc('133378711');
+// { valid: true, formatted: '1-33-37871-1' }
+```
+
+### Validar una cédula
+
+```typescript
+import { validateCedula } from 'dgii-ts';
+
+const result = validateCedula('05700084394');
+// { valid: true, formatted: '057-0008439-4' }
+```
+
+### Validar un NCF
+
+```typescript
+import { validateNcf } from 'dgii-ts';
+
+const result = validateNcf('B0100000001');
+// { valid: true, type: 'CREDITO_FISCAL', serie: 'B01' }
+```
+
+### Validar un e-NCF
+
+```typescript
+import { validateEcf } from 'basa-10-itbis-system-dgii-dgii-ts';
+
+const result = validateEcf('E310000000001');
+// { valid: true, type: 'CREDITO_FISCAL_ELECTRONICA', serie: 'E31' }
+```
+
+### Importar solo validadores (tree-shaking)
+
+```typescript
+import { validateRnc } from 'basa-10-itbis-system-dgii-dgii-ts/validators';
+```
+
+Los submódulos disponibles son `basa-10-itbis-system-dgii-dgii-ts/validators`, `dgii-ts/client`,
+`dgii-ts/scraping`, `basa-10-itbis-system-dgii-dgii-ts/soap`, `basa-10-itbis-system-dgii-dgii-ts/bulk` y `dgii-ts/errors`.
+
+### Consultar contribuyente
+
+```typescript
+import { DgiiClient } from 'basa-10-itbis-system-dgii-dgii-ts/client';
+
+const client = new DgiiClient();
+const result = await client.getContribuyente('133378711');
+// { rnc: '133378711', nombre: '...', estado: '...', ... }
+```
+
+### Validar NCF en línea
+
+```typescript
+const ncfResult = await client.getNCF('133378711', 'B0100000001');
+// { valid: true, rnc: '133378711', ncf: 'B0100000001', nombreComercial: '...' }
+```
+
+### Validar e-NCF en línea
+
+Para un e-NCF (serie E) la DGII exige el RNC del comprador. Sin él
+responde con un mensaje de campo requerido: `ScrapingClient.getNCF`
+lanza `DgiiServiceError` y `DgiiClient.getNCF` lo envuelve en
+`AllStrategiesFailedError` tras agotar reintentos y fallback (el
+mensaje conserva el texto de la DGII). Lo mismo pasa sin el código
+de seguridad: la DGII también lo exige (verificado con un e-NCF E31).
+
+```typescript
+const ecfResult = await client.getNCF('101010632', 'E310125217173', {
+  rncComprador: '131262414',
+  codigoSeguridad: 'KrOLI0',
+});
+// {
+//   valid: true,
+//   rnc: '101010632',
+//   ncf: 'E310125217173',
+//   rncComprador: '131262414',
+//   codigoSeguridad: 'KrOLI0',
+//   estado: 'Aceptado',
+//   montoTotal: 230677.74,
+//   totalItbis: 35188.13,
+//   fechaEmision: '2025-02-11',
+//   fechaFirma: '2025-02-11',
+// }
+```
+
+`valid: true` significa que la DGII encontró el comprobante, no que
+esté aceptado: revisa `estado`. Los campos `rncComprador`,
+`codigoSeguridad`, `estado`, `montoTotal`, `totalItbis`,
+`fechaEmision` y `fechaFirma` solo se llenan para la serie E, y
+`nombreComercial` no se llena para esa serie. Las fechas son strings
+tal como la DGII las renderiza. Las opciones se ignoran para un NCF de
+serie B.
+
+## Referencia del API
+
+### Validadores
+
+| Función | Descripción |
+| --- | --- |
+| `validateRnc(value)` | Valida RNC de 9 dígitos con dígito verificador |
+| `validateCedula(value)` | Valida cédula de 11 dígitos con dígito verificador |
+| `validateNcf(value)` | Valida formato y tipo de NCF (serie B) |
+| `validateEcf(value)` | Valida formato y tipo de e-NCF (serie E) |
+
+### Cliente resiliente
+
+| Clase/Método | Descripción |
+| --- | --- |
+| `DgiiClient` | Cliente con scraping, circuit breaker y retry (SOAP fallback opcional) |
+| `client.getContribuyente(rnc)` | Consulta datos de un contribuyente por RNC |
+| `client.getNCF(rnc, ncf, options?)` | Valida un comprobante fiscal contra la DGII (`options` para e-NCF) |
+
+### Scraping
+
+| Clase/Método | Descripción |
+| --- | --- |
+| `ScrapingClient` | Consulta páginas ASP.NET de la DGII |
+| `client.getContribuyente(rnc)` | Consulta contribuyente por RNC |
+| `client.getNCF(rnc, ncf, options?)` | Valida comprobante fiscal (`options` para e-NCF) |
+
+### Cliente SOAP (deprecated)
+
+| Clase/Método | Descripción |
+| --- | --- |
+| `DgiiSoapClient` | Cliente para WSMovilDGII (bloqueado) |
+| `client.getContribuyente(rnc)` | Consulta contribuyente por RNC |
+| `client.getNCF(rnc, ncf)` | Valida comprobante fiscal |
+
+### Datos masivos
+
+| Clase/Método | Descripción |
+| --- | --- |
+| `downloadBulkFile(options)` | Descarga DGII\_RNC.zip |
+| `parseBulkFile(options)` | Parsea el archivo TXT |
+
+`parseBulkFile` lanza `BulkFormatError` si el archivo no coincide con el
+layout de 11 columnas esperado (por ejemplo, si la DGII cambia el formato).
+Acepta `encoding` en las opciones (`latin1` por defecto).
+
+## Arquitectura
+
+```text
+┌─────────────────────────────────────────────────┐
+│                  Tu aplicación                  │
+├─────────────────────────────────────────────────┤
+│  Capa 1: Validación offline                     │
+│  ✓ Check-digit RNC/Cédula  ✓ Formato NCF/e-NCF │
+├─────────────────────────────────────────────────┤
+│  Capa 2: DgiiClient (resiliente)                │
+│  ✓ Web scraping (primario)                      │
+│  ✓ Circuit breaker  ✓ Retry                    │
+├─────────────────────────────────────────────────┤
+│  Capa 3: Datos masivos (DGII_RNC.zip)           │
+│  ✓ Descarga diaria  ✓ Parseo TXT               │
+└─────────────────────────────────────────────────┘
+```
+
+La **capa 1** es instantánea y funciona sin conexión. La **capa 2** ofrece
+datos en tiempo real con web scraping, circuit breaker y retry con backoff
+exponencial. La **capa 3** es
+ideal para operaciones en lote donde necesitas buscar miles de RNC rápidamente.
+
+## Estado del proyecto
+
+- [x] Validación offline (RNC, cédula, NCF, e-NCF)
+- [x] Web scraping de las páginas ASP.NET de la DGII
+- [x] Cliente SOAP WSMovilDGII (deprecated — bloqueado por la DGII)
+- [x] Cliente resiliente con circuit breaker y retry
+- [x] Importador DGII\_RNC.zip (descarga + parseo)
+- [x] Publicado en npm
+
+## Seguridad
+
+Para reportar vulnerabilidades, consulta [SECURITY.md](./SECURITY.md).
+
+## Contribuciones
+
+Las contribuciones son bienvenidas. Consulta [CONTRIBUTING.md](./CONTRIBUTING.md)
+para más detalles.
+
+## Licencia
+
+[MIT](./LICENSE)
+
+## Nota
+
+Esta es una librería comunitaria independiente, no está afiliada ni respaldada
+por la DGII. Para datos fiscales críticos, verifica siempre con un profesional
+contable autorizado.

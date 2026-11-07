@@ -1,0 +1,128 @@
+{
+  "name": "BASA-10-ITBIS-System-DGII-dgii-ts",
+  "version": "BASA 10.0.1.0",
+  "description": -"Librería TypeScript para validación e integración con la DGII de República Dominicana — RNC, Cédula, NCF, e-NCF",
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
+    },
+    "./validators": {
+      "import": {
+        "types": "./dist/validators.d.ts",
+        "default": "./dist/validators.js"
+      },
+      "require": {
+        "types": "./dist/validators.d.cts",
+        "default": "./dist/validators.cjs"
+      }
+    },
+    "./soap": {
+      "import": {
+        "types": "./dist/soap.d.ts",
+        "default": "./dist/soap.js"
+      },
+      "require": {
+        "types": "./dist/soap.d.cts",
+        "default": "./dist/soap.cjs"
+      }
+    },
+    "./bulk": {
+      "import": {
+        "types": "./dist/bulk.d.ts",
+        "default": "./dist/bulk.js"
+      },
+      "require": {
+        "types": "./dist/bulk.d.cts",
+        "default": "./dist/bulk.cjs"
+      }
+    },
+    "./scraping": {
+      "import": {
+        "types": "./dist/scraping.d.ts",
+        "default": "./dist/scraping.js"
+      },
+      "require": {
+        "types": "./dist/scraping.d.cts",
+        "default": "./dist/scraping.cjs"
+      }
+    },
+    "./client": {
+      "import": {
+        "types": "./dist/client.d.ts",
+        "default": "./dist/client.js"
+      },
+      "require": {
+        "types": "./dist/client.d.cts",
+        "default": "./dist/client.cjs"
+      }
+    },
+    "./errors": {
+      "import": {
+        "types": "./dist/errors.d.ts",
+        "default": "./dist/errors.js"
+      },
+      "require": {
+        "types": "./dist/errors.d.cts",
+        "default": "./dist/errors.cjs"
+      }
+    }
+  },
+  "sideEffects": false,
+  "files": [
+    "dist",
+    "skills"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit -p tsconfig.build.json",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "dgii",
+    "rnc",
+    "cedula",
+    "ncf",
+    "ecf",
+    "dominican-republic",
+    "republica-dominicana",
+    "tax",
+    "impuestos",
+    "typescript"
+  ],
+  "author": "TheMVProgrammer <franklin0415@hotmail.com>",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/balderasantosyasociados/BASA_10_ITBIS_System_DGII/dgii-ts.git"
+  },
+  "bugs": {
+    "url": "https://github.com/balderasantosyasociados/BASA_10_ITBIS_System_DGII/dgii-ts/issues"
+  },
+  "homepage": "https://github.com/balderasantosyasociados/BASA_10_ITBIS_System_DGII/dgii-ts#readme",
+  "engines": {
+    "node": ">=18"
+  },
+  "overrides": {
+    "vite": "^7.3.6"
+  },
+  "devDependencies": {
+    "@types/node": "^18.19.130",
+    "@vitest/coverage-v8": "^3.2.4",
+    "tsup": "^8.0.0",
+    "typescript": "^5.4.0",
+    "vitest": "^3.0.0"
+  }
+}

@@ -1,0 +1,26 @@
+
+https://github.com/franklinmdev/dgii-ts.git
+
+CLAUDE
+
+
+
+****************************************************************************************
+sustituir por
+
+https://github.com/balderasantosyasociados/BASA_10_ITBIS_System_DGII/dgii-ts.git
+****************************************
+AUDIT INTELLIGENCE USA
+
+*********
+
+"name": "dgii-ts",
+  "version": "0.3.0",
+
+
+https://github.com/balderasantosyasociados/basa-10-itbis-system-dgii/dgii-ts.git
+
+
+
+"name": "basa-10-itbis-system-dgii-dgii-ts",
+  "version": "BASA 10.0.1.0",
