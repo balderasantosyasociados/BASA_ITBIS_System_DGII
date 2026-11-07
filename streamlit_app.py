@@ -9,7 +9,7 @@ from sqlalchemy import create_engine, Column, Integer, String, Float, DateTime, 
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 
-# Configuración de página optimizada Audit Intelligence USA / Global Suite
+# Configuración de página optimizada Audit Intelligence USA / Global Suite 100/100
 st.set_page_config(
     page_title="Audit Intelligence USA - Global Suite 100/100",
     page_icon="🛡️",
@@ -62,14 +62,6 @@ st.markdown("""
         margin-bottom: 20px;
         color: #1e293b;
     }
-    .ai-recommendation-box {
-        background-color: #f0fdf4;
-        border: 1px solid #16a34a;
-        padding: 15px;
-        border-radius: 8px;
-        margin-bottom: 15px;
-        color: #166534;
-    }
     .stButton>button {
         width: 100%;
         border-radius: 4px;
@@ -88,14 +80,14 @@ class RegistroTransaccion(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     pais = Column(String(50), nullable=False)
     entidad_rnc = Column(String(20), nullable=False)
-    documento_id = Column(String(50), nullable=False)  # NCF, e-CF o Invoice ID
-    tipo_registro = Column(String(30), nullable=False)  # Gasto, Activo, Seguro, Impuesto
+    documento_id = Column(String(50), nullable=False)
+    tipo_registro = Column(String(30), nullable=False)
     monto_bruto = Column(Float, nullable=False)
     impuesto_calculado = Column(Float, nullable=False)
     retencion_aplicada = Column(Float, default=0.0)
-    detalles_json = Column(Text, nullable=False)       # Parámetros NIIF, NIC, NICSP, NOBACI o DGII
+    detalles_json = Column(Text, nullable=False)
     fecha_registro = Column(DateTime, default=datetime.utcnow)
-    firma_hash = Column(String(64), nullable=True)     # Firma criptográfica del Auditor/CPA
+    firma_hash = Column(String(64), nullable=True)
 
 class UsuarioERP(Base):
     __tablename__ = 'usuarios_erp'
@@ -144,7 +136,6 @@ Base.metadata.create_all(engine)
 SessionLocal = sessionmaker(bind=engine)
 db_session = SessionLocal()
 
-# Inicializar datos por defecto si la base de datos está vacía
 def inicializar_datos_sistema():
     if db_session.query(UsuarioERP).count() == 0:
         pass_default = hashlib.sha256("Wilfrida7".encode()).hexdigest()
@@ -166,7 +157,6 @@ def inicializar_datos_sistema():
 
 inicializar_datos_sistema()
 
-# Inicialización del Estado de Sesión
 if "usuario_autenticado" not in st.session_state:
     st.session_state.usuario_autenticado = None
 if "rol_usuario" not in st.session_state:
