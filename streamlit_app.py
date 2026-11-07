@@ -175,8 +175,8 @@ def init_db():
 
 init_db()
 
-# Inicialización de Estado de Sesión para Auditoría Forense AFA & Contrainteligencia
-if "autenticado_forense" not in session_state_check := st.session_state:
+# Inicialización de Estado de Sesión para Auditoría Forense AFA & Contrainteligencia (Corregido SyntaxError)
+if "autenticado_forense" not in st.session_state:
     st.session_state.autenticado_forense = False
 if "rnc_auditado" not in st.session_state:
     st.session_state.rnc_auditado = "133412918"
