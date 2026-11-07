@@ -8,7 +8,7 @@ import openpyxl
 # 1. CONFIGURACIÓN DE LA PÁGINA Y ESTILOS
 # ==========================================
 st.set_page_config(
-    page_title="ITBIS_System_DGII - Sistema Integral Fiscal",
+    page_title="BASA_10_ITBIS_System_DGII - Sistema Integral Fiscal",
     page_icon="🇩🇴",
     layout="wide"
 )
