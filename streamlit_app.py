@@ -7,7 +7,7 @@ Migración Universal de Bases de Datos (Cualquier idioma, formato o sistema de o
 Integración DGII-TS (Validación RNC/Cédula, NCF, e-NCF, Conectividad SOAP, Bulk y Scraping),
 Espejo Funcional Portal Facturador Gratuito DGII (Gestión de Certificados .p12 y Credenciales),
 Recálculo Autónomo de Depreciación, Auditoría NIA y Seguridad Antihacker 100/100.
-Version: 10.9.35-PROD Enterprise Full Production & Universal Continuity Suite (dgii-ts Integrated)
+Version: 10.9.36-PROD Enterprise Full Production & Universal Continuity Suite (dgii-ts Integrated)
 """
 
 import os
@@ -227,7 +227,7 @@ def obtener_siguiente_secuencia_encf() -> str:
             num_val = int(num_str) + 1
             prefijo = ultimo[:len(ultimo)-len(num_str)]
             return f"{prefijo}{num_val:0{len(num_str)}d}"
-    return "E310000000029"  Continuando exactamente posterior al último respaldo E310000000028
+    return "E310000000029"  # Continuando exactamente posterior al último respaldo E310000000028
 
 # ==========================================
 # 3. CONFIGURACIÓN DE INTERFAZ STREAMLIT
@@ -349,7 +349,6 @@ with tabs[2]:
 with tabs[3]:
     st.markdown("### 📤 Emisión de Comprobante Fiscal Electrónico (e-CF) - Edición Full Full")
     
-    # Secuencia exacta calculada desde la DGII
     siguiente_secuencia = obtener_siguiente_secuencia_encf()
     st.info(f"🔢 **Secuencia Exacta DGII Detectada:** `{siguiente_secuencia}` (Continuación automática del último documento validado).")
     
